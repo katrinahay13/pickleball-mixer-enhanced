@@ -1,0 +1,1151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="PB Mixer">
+  <title>Pickleball Mixer Enhanced</title>
+  <style>
+    :root {
+      --bg: #f7f9fc;
+      --card: #ffffff;
+      --text: #1a2433;
+      --muted: #5f6f85;
+      --line: #d7deea;
+      --accent: #006d77;
+      --accent-2: #83c5be;
+      --danger: #c62828;
+      --ok: #2e7d32;
+      --radius: 14px;
+      --shadow: 0 8px 24px rgba(19, 35, 60, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top right, #d6f2ef 0, transparent 35%),
+        radial-gradient(circle at bottom left, #e3ecff 0, transparent 40%),
+        var(--bg);
+      min-height: 100vh;
+    }
+
+    .app {
+      width: min(1150px, 96vw);
+      margin: 20px auto 32px;
+      display: grid;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+
+    h1, h2, h3 {
+      margin: 0 0 12px;
+      line-height: 1.2;
+    }
+
+    h1 { font-size: clamp(1.25rem, 2.7vw, 1.95rem); }
+    h2 { font-size: clamp(1.05rem, 2.2vw, 1.35rem); }
+    h3 { font-size: 1rem; }
+
+    .sub {
+      color: var(--muted);
+      margin: 0 0 12px;
+      font-size: 0.94rem;
+    }
+
+    .controls,
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .controls { margin-top: 12px; }
+
+    .court-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin: 8px 0 4px;
+      font-weight: 700;
+    }
+
+    .court-picker label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .players-grid {
+      display: grid;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .players-grid.cols-4 { grid-template-columns: repeat(4, minmax(140px, 1fr)); }
+    .players-grid.cols-3 { grid-template-columns: repeat(3, minmax(140px, 1fr)); }
+
+    .players-grid input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      font-size: 0.95rem;
+      background: #fff;
+    }
+
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button.secondary { background: #50627b; }
+    button.ghost {
+      background: #e9eef7;
+      color: var(--text);
+      border: 1px solid var(--line);
+    }
+
+    .status {
+      margin-top: 10px;
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+
+    .status.err { color: var(--danger); font-weight: 700; }
+    .status.ok { color: var(--ok); font-weight: 700; }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .summary-box {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      background: #fcfdff;
+    }
+
+    .summary-label {
+      color: var(--muted);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-bottom: 4px;
+    }
+
+    .summary-value {
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    .schedule {
+      display: grid;
+      gap: 10px;
+    }
+
+    .round-block {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 10px;
+      background: #fbfcff;
+    }
+
+    .round-title {
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    .matches-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 10px;
+    }
+
+    .match {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      background: #ffffff;
+      display: grid;
+      gap: 8px;
+    }
+
+    .match-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: baseline;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .teams {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+
+    .vs {
+      color: var(--muted);
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .scores {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .score-select {
+      width: 100%;
+      min-width: 72px;
+      text-align: center;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.96rem;
+      background: #fff;
+    }
+
+    .rank-wrap {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 7px 6px;
+      text-align: left;
+      white-space: nowrap;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 700;
+      font-size: 0.82rem;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .footer-note {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-top: 10px;
+    }
+
+    .tiny {
+      color: var(--muted);
+      font-size: 0.83rem;
+    }
+
+    @media (max-width: 900px) {
+      .players-grid.cols-4,
+      .players-grid.cols-3,
+      .summary-grid,
+      .rank-wrap {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .app {
+        width: min(100vw, 100%);
+        margin: 0;
+        padding: 10px;
+      }
+
+      .card {
+        border-radius: 12px;
+        padding: 12px;
+      }
+
+      .players-grid.cols-4,
+      .players-grid.cols-3,
+      .summary-grid,
+      .rank-wrap {
+        grid-template-columns: 1fr;
+      }
+
+      .teams, .scores {
+        grid-template-columns: 1fr;
+        gap: 6px;
+        text-align: center;
+      }
+
+      .vs { display: none; }
+
+      th, td { font-size: 0.85rem; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="card">
+      <h1>Pickleball Round-Robin Mixer</h1>
+      <p class="sub">Choose 2 or 3 courts, enter player names, generate a balanced doubles schedule, add final scores, and track standings.</p>
+
+      <div class="court-picker">
+        <label><input type="radio" name="courtMode" value="2" checked> 2 Courts</label>
+        <label><input type="radio" name="courtMode" value="3"> 3 Courts</label>
+      </div>
+
+      <p class="tiny" id="modeNote"></p>
+
+      <div class="players-grid cols-4" id="playerInputs"></div>
+
+      <div class="controls">
+        <label><input type="checkbox" id="randomizeNames" checked> Randomize player order each generation</label>
+      </div>
+
+      <div class="controls">
+        <button id="generateBtn">Generate Schedule</button>
+        <button id="clearScoresBtn" class="secondary">Clear Scores</button>
+        <button id="resetAllBtn" class="ghost">Reset Everything</button>
+      </div>
+
+      <div class="status" id="status"></div>
+
+      <div class="summary-grid">
+        <div class="summary-box">
+          <div class="summary-label">Courts</div>
+          <div class="summary-value" id="summaryCourts">2</div>
+        </div>
+        <div class="summary-box">
+          <div class="summary-label">Players</div>
+          <div class="summary-value" id="summaryPlayers">8</div>
+        </div>
+        <div class="summary-box">
+          <div class="summary-label">Rounds</div>
+          <div class="summary-value" id="summaryRounds">7</div>
+        </div>
+        <div class="summary-box">
+          <div class="summary-label">Matches</div>
+          <div class="summary-value" id="summaryMatches">14</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 id="scheduleTitle">Schedule</h2>
+      <div class="schedule" id="schedule"></div>
+    </section>
+
+    <section class="card">
+      <h2>Final Rankings</h2>
+      <div class="rank-wrap">
+        <div>
+          <h3>Ranked by Wins</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Player</th>
+                <th class="num">W</th>
+                <th class="num">L</th>
+                <th class="num">PF</th>
+                <th class="num">PA</th>
+                <th class="num">Diff</th>
+              </tr>
+            </thead>
+            <tbody id="winsTable"></tbody>
+          </table>
+        </div>
+
+        <div>
+          <h3>Ranked by Points</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Player</th>
+                <th class="num">PF</th>
+                <th class="num">PA</th>
+                <th class="num">Diff</th>
+                <th class="num">W</th>
+                <th class="num">L</th>
+              </tr>
+            </thead>
+            <tbody id="pointsTable"></tbody>
+          </table>
+        </div>
+      </div>
+      <p class="footer-note">Wins table breaks ties by differential, then points for. Points table breaks ties by differential, then wins.</p>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      const STORAGE_KEY = "pickleball_mixer_enhanced_v1";
+
+      const els = {
+        playerInputs: document.getElementById("playerInputs"),
+        modeNote: document.getElementById("modeNote"),
+        randomizeNames: document.getElementById("randomizeNames"),
+        generateBtn: document.getElementById("generateBtn"),
+        clearScoresBtn: document.getElementById("clearScoresBtn"),
+        resetAllBtn: document.getElementById("resetAllBtn"),
+        schedule: document.getElementById("schedule"),
+        winsTable: document.getElementById("winsTable"),
+        pointsTable: document.getElementById("pointsTable"),
+        status: document.getElementById("status"),
+        summaryCourts: document.getElementById("summaryCourts"),
+        summaryPlayers: document.getElementById("summaryPlayers"),
+        summaryRounds: document.getElementById("summaryRounds"),
+        summaryMatches: document.getElementById("summaryMatches"),
+        scheduleTitle: document.getElementById("scheduleTitle"),
+        modeRadios: Array.from(document.querySelectorAll('input[name="courtMode"]'))
+      };
+
+      const state = {
+        courts: 2,
+        namesByCount: {
+          8: Array.from({ length: 8 }, (_, i) => `Player ${i + 1}`),
+          12: Array.from({ length: 12 }, (_, i) => `Player ${i + 1}`)
+        },
+        names: Array.from({ length: 8 }, (_, i) => `Player ${i + 1}`),
+        schedule: [],
+        scores: {}
+      };
+
+      function currentPlayerCount() {
+        return state.courts * 4;
+      }
+
+      function currentRounds() {
+        return currentPlayerCount() - 1;
+      }
+
+      function currentMatchCount() {
+        return currentRounds() * state.courts;
+      }
+
+      function updateSummary() {
+        const players = currentPlayerCount();
+        const rounds = currentRounds();
+        els.summaryCourts.textContent = String(state.courts);
+        els.summaryPlayers.textContent = String(players);
+        els.summaryRounds.textContent = String(rounds);
+        els.summaryMatches.textContent = String(currentMatchCount());
+        els.scheduleTitle.textContent = `Schedule (${state.courts} ${state.courts === 1 ? "Court" : "Courts"} × ${rounds} Rounds)`;
+        els.modeNote.textContent = state.courts === 2
+          ? "2 courts = 8 players and 7 rounds."
+          : "3 courts = 12 players and 11 rounds.";
+      }
+
+      function setStatus(message, type) {
+        els.status.textContent = message || "";
+        els.status.className = "status" + (type ? ` ${type}` : "");
+      }
+
+      function clone(obj) {
+        return JSON.parse(JSON.stringify(obj));
+      }
+
+      function shuffle(arr) {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+      }
+
+      function getModeValue() {
+        const selected = els.modeRadios.find(r => r.checked);
+        return selected ? parseInt(selected.value, 10) : 2;
+      }
+
+      function switchMode(newCourts, fromRestore) {
+        state.namesByCount[currentPlayerCount()] = getInputNames();
+        state.courts = newCourts;
+        const count = currentPlayerCount();
+        state.names = (state.namesByCount[count] && state.namesByCount[count].length === count)
+          ? state.namesByCount[count].slice()
+          : Array.from({ length: count }, (_, i) => `Player ${i + 1}`);
+        state.schedule = [];
+        state.scores = {};
+        updateSummary();
+        initInputs();
+        renderSchedule();
+        renderRankings();
+        if (!fromRestore) {
+          persist();
+          setStatus("", "");
+        }
+      }
+
+      function initInputs() {
+        const count = currentPlayerCount();
+        els.playerInputs.innerHTML = "";
+        els.playerInputs.className = `players-grid ${count === 8 ? "cols-4" : "cols-3"}`;
+
+        for (let i = 0; i < count; i += 1) {
+          const input = document.createElement("input");
+          input.type = "text";
+          input.placeholder = `Player ${i + 1}`;
+          input.value = state.names[i] || "";
+          input.dataset.index = String(i);
+          input.addEventListener("input", (e) => {
+            state.names[i] = e.target.value;
+            state.namesByCount[count] = state.names.slice();
+            persist();
+            renderRankings();
+            rerenderScheduleNamesOnly();
+          });
+          els.playerInputs.appendChild(input);
+        }
+      }
+
+      function getInputNames() {
+        const count = currentPlayerCount();
+        const inputs = Array.from(els.playerInputs.querySelectorAll("input"));
+        if (!inputs.length) {
+          return state.names.slice(0, count);
+        }
+        return inputs.map((input, i) => input.value || `Player ${i + 1}`);
+      }
+
+      function normalizeNames() {
+        const count = currentPlayerCount();
+        const raw = getInputNames();
+        const trimmed = raw.map((n, i) => {
+          const val = (n || "").trim();
+          return val || `Player ${i + 1}`;
+        });
+
+        if (trimmed.length !== count) return null;
+
+        const uniq = new Set(trimmed.map((n) => n.toLowerCase()));
+        if (uniq.size !== count) {
+          setStatus("Player names must be unique (case-insensitive).", "err");
+          return null;
+        }
+
+        state.names = trimmed;
+        state.namesByCount[count] = trimmed.slice();
+        return trimmed;
+      }
+
+      function teamLabel(ids) {
+        return `${state.names[ids[0]]} & ${state.names[ids[1]]}`;
+      }
+
+      function generatePartnerRounds(order) {
+        const arr = order.slice();
+        const rounds = [];
+        const n = arr.length;
+
+        for (let r = 0; r < n - 1; r += 1) {
+          const pairs = [];
+          for (let i = 0; i < n / 2; i += 1) {
+            pairs.push([arr[i], arr[n - 1 - i]]);
+          }
+          rounds.push(pairs);
+
+          const fixed = arr[0];
+          const rest = arr.slice(1);
+          rest.unshift(rest.pop());
+          arr.splice(0, arr.length, fixed, ...rest);
+        }
+
+        return rounds;
+      }
+
+      function enumerateMatchings(pairs) {
+        if (pairs.length === 0) return [[]];
+        const first = pairs[0];
+        const results = [];
+        for (let i = 1; i < pairs.length; i += 1) {
+          const remaining = [];
+          for (let j = 1; j < pairs.length; j += 1) {
+            if (j !== i) remaining.push(pairs[j]);
+          }
+          const tails = enumerateMatchings(remaining);
+          tails.forEach((tail) => {
+            results.push([ [first, pairs[i]], ...tail ]);
+          });
+        }
+        return results;
+      }
+
+      function permutations(arr) {
+        if (arr.length <= 1) return [arr.slice()];
+        const out = [];
+        for (let i = 0; i < arr.length; i += 1) {
+          const first = arr[i];
+          const rest = arr.slice(0, i).concat(arr.slice(i + 1));
+          permutations(rest).forEach((tail) => out.push([first, ...tail]));
+        }
+        return out;
+      }
+
+      function createEmptyCounts(playerCount, courts) {
+        return {
+          opp: Array.from({ length: playerCount }, () => Array(playerCount).fill(0)),
+          sameCourt: Array.from({ length: playerCount }, () => Array(playerCount).fill(0)),
+          court: Array.from({ length: playerCount }, () => Array(courts).fill(0)),
+          sideA: Array(playerCount).fill(0),
+          sideB: Array(playerCount).fill(0)
+        };
+      }
+
+      function countIncrementalPenalty(teamA, teamB, courtIndex, counts, rounds, courts) {
+        let score = 0;
+        const targetCourt = rounds / courts;
+        const targetSide = rounds / 2;
+
+        const onCourt = [...teamA, ...teamB];
+
+        for (let i = 0; i < onCourt.length; i += 1) {
+          const p = onCourt[i];
+
+          const beforeCourt = counts.court[p][courtIndex];
+          const afterCourt = beforeCourt + 1;
+          score += (Math.abs(afterCourt - targetCourt) - Math.abs(beforeCourt - targetCourt)) * 6;
+
+          const beforeA = counts.sideA[p];
+          const beforeB = counts.sideB[p];
+
+          if (teamA.includes(p)) {
+            const afterA = beforeA + 1;
+            score += (Math.abs(afterA - targetSide) - Math.abs(beforeA - targetSide)) * 4;
+          } else {
+            const afterB = beforeB + 1;
+            score += (Math.abs(afterB - targetSide) - Math.abs(beforeB - targetSide)) * 4;
+          }
+        }
+
+        for (let i = 0; i < teamA.length; i += 1) {
+          for (let j = 0; j < teamB.length; j += 1) {
+            const p = teamA[i];
+            const q = teamB[j];
+            const beforeOpp = counts.opp[p][q];
+            const afterOpp = beforeOpp + 1;
+            const beforeExcess = Math.max(0, beforeOpp - 2);
+            const afterExcess = Math.max(0, afterOpp - 2);
+            score += (afterExcess * afterExcess - beforeExcess * beforeExcess) * 16;
+          }
+        }
+
+        for (let i = 0; i < onCourt.length; i += 1) {
+          for (let j = i + 1; j < onCourt.length; j += 1) {
+            const p = onCourt[i];
+            const q = onCourt[j];
+            const beforeSame = counts.sameCourt[p][q];
+            const afterSame = beforeSame + 1;
+            const beforeExcess = Math.max(0, beforeSame - 3);
+            const afterExcess = Math.max(0, afterSame - 3);
+            score += (afterExcess * afterExcess - beforeExcess * beforeExcess) * 7;
+          }
+        }
+
+        return score;
+      }
+
+      function applyMatchToCounts(teamA, teamB, courtIndex, counts) {
+        const all = [...teamA, ...teamB];
+        all.forEach((p) => {
+          counts.court[p][courtIndex] += 1;
+        });
+
+        teamA.forEach((p) => { counts.sideA[p] += 1; });
+        teamB.forEach((p) => { counts.sideB[p] += 1; });
+
+        for (let i = 0; i < teamA.length; i += 1) {
+          for (let j = 0; j < teamB.length; j += 1) {
+            const p = teamA[i];
+            const q = teamB[j];
+            counts.opp[p][q] += 1;
+            counts.opp[q][p] += 1;
+          }
+        }
+
+        for (let i = 0; i < all.length; i += 1) {
+          for (let j = i + 1; j < all.length; j += 1) {
+            const p = all[i];
+            const q = all[j];
+            counts.sameCourt[p][q] += 1;
+            counts.sameCourt[q][p] += 1;
+          }
+        }
+      }
+
+      function evaluateFullSchedule(schedule, playerCount, courts) {
+        const counts = createEmptyCounts(playerCount, courts);
+        const rounds = playerCount - 1;
+
+        schedule.forEach((m) => {
+          applyMatchToCounts(m.teamA, m.teamB, m.court - 1, counts);
+        });
+
+        let score = 0;
+        const targetCourt = rounds / courts;
+
+        for (let p = 0; p < playerCount; p += 1) {
+          for (let c = 0; c < courts; c += 1) {
+            score += Math.pow(counts.court[p][c] - targetCourt, 2) * 6;
+          }
+          score += Math.pow(counts.sideA[p] - counts.sideB[p], 2) * 4;
+        }
+
+        for (let i = 0; i < playerCount; i += 1) {
+          for (let j = i + 1; j < playerCount; j += 1) {
+            const opp = counts.opp[i][j];
+            const same = counts.sameCourt[i][j];
+            if (opp > 2) score += Math.pow(opp - 2, 2) * 18;
+            if (same > 3) score += Math.pow(same - 3, 2) * 8;
+          }
+        }
+
+        return score;
+      }
+
+      function buildBestSchedule(playerCount, courts, randomizeNames) {
+        const rounds = playerCount - 1;
+        const pairingsPerRound = playerCount / 2;
+        const allCourts = Array.from({ length: courts }, (_, i) => i);
+        const courtPerms = permutations(allCourts);
+        const tries = playerCount === 8 ? 150 : 250;
+
+        let bestSchedule = null;
+        let bestScore = Infinity;
+
+        for (let tryIndex = 0; tryIndex < tries; tryIndex += 1) {
+          const baseOrder = Array.from({ length: playerCount }, (_, i) => i);
+          const order = randomizeNames ? shuffle(baseOrder) : baseOrder;
+          const partnerRounds = generatePartnerRounds(order);
+          const counts = createEmptyCounts(playerCount, courts);
+          const trialSchedule = [];
+          let failed = false;
+          let matchId = 1;
+
+          for (let r = 0; r < rounds; r += 1) {
+            const pairs = partnerRounds[r];
+            const possibleMatchings = enumerateMatchings(pairs);
+
+            let bestRoundChoice = null;
+            let bestRoundScore = Infinity;
+
+            for (let m = 0; m < possibleMatchings.length; m += 1) {
+              const matching = possibleMatchings[m];
+
+              for (let cp = 0; cp < courtPerms.length; cp += 1) {
+                const courtOrder = courtPerms[cp];
+                const orientationCount = 1 << courts;
+
+                for (let mask = 0; mask < orientationCount; mask += 1) {
+                  let tempScore = 0;
+                  const assignments = [];
+
+                  for (let idx = 0; idx < matching.length; idx += 1) {
+                    let pair1 = matching[idx][0];
+                    let pair2 = matching[idx][1];
+
+                    if ((mask >> idx) & 1) {
+                      const swap = pair1;
+                      pair1 = pair2;
+                      pair2 = swap;
+                    }
+
+                    const courtIndex = courtOrder[idx];
+                    tempScore += countIncrementalPenalty(pair1, pair2, courtIndex, counts, rounds, courts);
+                    assignments.push({
+                      court: courtIndex + 1,
+                      teamA: pair1.slice(),
+                      teamB: pair2.slice()
+                    });
+                  }
+
+                  if (tempScore < bestRoundScore) {
+                    bestRoundScore = tempScore;
+                    bestRoundChoice = assignments;
+                  }
+                }
+              }
+            }
+
+            if (!bestRoundChoice) {
+              failed = true;
+              break;
+            }
+
+            bestRoundChoice
+              .sort((a, b) => a.court - b.court)
+              .forEach((assignment) => {
+                trialSchedule.push({
+                  id: `m${matchId++}`,
+                  round: r + 1,
+                  court: assignment.court,
+                  teamA: assignment.teamA,
+                  teamB: assignment.teamB
+                });
+                applyMatchToCounts(assignment.teamA, assignment.teamB, assignment.court - 1, counts);
+              });
+          }
+
+          if (failed) continue;
+
+          const finalScore = evaluateFullSchedule(trialSchedule, playerCount, courts);
+          if (finalScore < bestScore) {
+            bestScore = finalScore;
+            bestSchedule = trialSchedule;
+          }
+        }
+
+        return bestSchedule;
+      }
+
+      function buildSchedule() {
+        const names = normalizeNames();
+        if (!names) return;
+
+        setStatus("Generating balanced schedule…", "");
+        const players = currentPlayerCount();
+        const courts = state.courts;
+        const schedule = buildBestSchedule(players, courts, els.randomizeNames.checked);
+
+        if (!schedule || !schedule.length) {
+          setStatus("Could not generate a schedule. Please try again.", "err");
+          return;
+        }
+
+        state.schedule = schedule;
+        state.scores = {};
+        persist();
+        renderSchedule();
+        renderRankings();
+        setStatus(
+          courts === 2
+            ? "Balanced 2-court schedule generated. Enter scores from the dropdowns."
+            : "Balanced 3-court schedule generated. Enter scores from the dropdowns.",
+          "ok"
+        );
+      }
+
+      function createScoreSelect(matchId, side, value) {
+        const select = document.createElement("select");
+        select.className = "score-select";
+        select.dataset.matchId = matchId;
+        select.dataset.side = side;
+
+        const blank = document.createElement("option");
+        blank.value = "";
+        blank.textContent = "—";
+        select.appendChild(blank);
+
+        for (let i = 0; i <= 15; i += 1) {
+          const option = document.createElement("option");
+          option.value = String(i);
+          option.textContent = String(i);
+          select.appendChild(option);
+        }
+
+        select.value = Number.isFinite(value) ? String(value) : "";
+        select.addEventListener("change", onScoreChange);
+        return select;
+      }
+
+      function onScoreChange(e) {
+        const matchId = e.target.dataset.matchId;
+        const side = e.target.dataset.side;
+        const raw = e.target.value;
+
+        if (!state.scores[matchId]) state.scores[matchId] = { a: null, b: null };
+
+        if (raw === "") {
+          state.scores[matchId][side] = null;
+        } else {
+          const parsed = parseInt(raw, 10);
+          state.scores[matchId][side] = Number.isFinite(parsed) ? parsed : null;
+        }
+
+        if (state.scores[matchId].a == null && state.scores[matchId].b == null) {
+          delete state.scores[matchId];
+        }
+
+        persist();
+        renderRankings();
+      }
+
+      function renderSchedule() {
+        els.schedule.innerHTML = "";
+
+        if (!state.schedule.length) {
+          const empty = document.createElement("p");
+          empty.className = "sub";
+          empty.textContent = "No schedule yet. Choose courts, enter names, and click Generate Schedule.";
+          els.schedule.appendChild(empty);
+          return;
+        }
+
+        const rounds = {};
+        state.schedule.forEach((match) => {
+          if (!rounds[match.round]) rounds[match.round] = [];
+          rounds[match.round].push(match);
+        });
+
+        Object.keys(rounds).sort((a, b) => Number(a) - Number(b)).forEach((roundKey) => {
+          const block = document.createElement("section");
+          block.className = "round-block";
+
+          const title = document.createElement("div");
+          title.className = "round-title";
+          title.textContent = `Round ${roundKey}`;
+
+          const grid = document.createElement("div");
+          grid.className = "matches-grid";
+
+          rounds[roundKey]
+            .sort((a, b) => a.court - b.court)
+            .forEach((match) => {
+              const card = document.createElement("article");
+              card.className = "match";
+
+              const head = document.createElement("div");
+              head.className = "match-head";
+              head.innerHTML = `<strong>Court ${match.court}</strong><span>Side A vs Side B</span>`;
+
+              const teams = document.createElement("div");
+              teams.className = "teams";
+              teams.innerHTML = `<div>${teamLabel(match.teamA)}</div><div class="vs">vs</div><div>${teamLabel(match.teamB)}</div>`;
+
+              const scores = document.createElement("div");
+              scores.className = "scores";
+
+              const saved = state.scores[match.id] || { a: null, b: null };
+              scores.appendChild(createScoreSelect(match.id, "a", saved.a));
+
+              const dash = document.createElement("div");
+              dash.className = "vs";
+              dash.textContent = "-";
+              scores.appendChild(dash);
+
+              scores.appendChild(createScoreSelect(match.id, "b", saved.b));
+
+              card.append(head, teams, scores);
+              grid.appendChild(card);
+            });
+
+          block.append(title, grid);
+          els.schedule.appendChild(block);
+        });
+      }
+
+      function rerenderScheduleNamesOnly() {
+        if (!state.schedule.length) return;
+        renderSchedule();
+      }
+
+      function computeStats() {
+        const stats = state.names.map((name, idx) => ({
+          idx,
+          name,
+          wins: 0,
+          losses: 0,
+          pf: 0,
+          pa: 0,
+          diff: 0
+        }));
+
+        state.schedule.forEach((match) => {
+          const score = state.scores[match.id];
+          if (!score) return;
+          if (!Number.isFinite(score.a) || !Number.isFinite(score.b)) return;
+
+          match.teamA.forEach((pid) => {
+            stats[pid].pf += score.a;
+            stats[pid].pa += score.b;
+          });
+
+          match.teamB.forEach((pid) => {
+            stats[pid].pf += score.b;
+            stats[pid].pa += score.a;
+          });
+
+          if (score.a > score.b) {
+            match.teamA.forEach((pid) => { stats[pid].wins += 1; });
+            match.teamB.forEach((pid) => { stats[pid].losses += 1; });
+          } else if (score.b > score.a) {
+            match.teamB.forEach((pid) => { stats[pid].wins += 1; });
+            match.teamA.forEach((pid) => { stats[pid].losses += 1; });
+          }
+        });
+
+        stats.forEach((s) => {
+          s.diff = s.pf - s.pa;
+        });
+
+        return stats;
+      }
+
+      function renderTable(tbody, rows, cols) {
+        tbody.innerHTML = "";
+        rows.forEach((row, i) => {
+          const tr = document.createElement("tr");
+          tr.innerHTML = cols.map((c) => {
+            const value = c === "rank" ? i + 1 : row[c];
+            const numClass = typeof value === "number" ? "num" : "";
+            return `<td class="${numClass}">${value}</td>`;
+          }).join("");
+          tbody.appendChild(tr);
+        });
+      }
+
+      function renderRankings() {
+        const stats = computeStats();
+
+        const byWins = stats.slice().sort((a, b) =>
+          b.wins - a.wins ||
+          b.diff - a.diff ||
+          b.pf - a.pf ||
+          a.name.localeCompare(b.name)
+        );
+
+        const byPoints = stats.slice().sort((a, b) =>
+          b.pf - a.pf ||
+          b.diff - a.diff ||
+          b.wins - a.wins ||
+          a.name.localeCompare(b.name)
+        );
+
+        renderTable(els.winsTable, byWins, ["rank", "name", "wins", "losses", "pf", "pa", "diff"]);
+        renderTable(els.pointsTable, byPoints, ["rank", "name", "pf", "pa", "diff", "wins", "losses"]);
+      }
+
+      function clearScores() {
+        state.scores = {};
+        persist();
+        renderSchedule();
+        renderRankings();
+        setStatus("All scores cleared.", "ok");
+      }
+
+      function resetAll() {
+        state.namesByCount[8] = Array.from({ length: 8 }, (_, i) => `Player ${i + 1}`);
+        state.namesByCount[12] = Array.from({ length: 12 }, (_, i) => `Player ${i + 1}`);
+        state.names = state.namesByCount[currentPlayerCount()].slice();
+        state.schedule = [];
+        state.scores = {};
+        els.randomizeNames.checked = true;
+        persist();
+        initInputs();
+        renderSchedule();
+        renderRankings();
+        setStatus("Reset complete.", "ok");
+      }
+
+      function persist() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            courts: state.courts,
+            namesByCount: state.namesByCount,
+            schedule: state.schedule,
+            scores: state.scores,
+            randomize: els.randomizeNames.checked
+          }));
+        } catch (err) {
+          console.warn("Could not save to localStorage", err);
+        }
+      }
+
+      function restore() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return;
+
+          const saved = JSON.parse(raw);
+
+          if (saved.courts === 2 || saved.courts === 3) {
+            state.courts = saved.courts;
+            const radio = els.modeRadios.find(r => Number(r.value) === state.courts);
+            if (radio) radio.checked = true;
+          }
+
+          if (saved.namesByCount && typeof saved.namesByCount === "object") {
+            if (Array.isArray(saved.namesByCount[8]) && saved.namesByCount[8].length === 8) {
+              state.namesByCount[8] = saved.namesByCount[8];
+            }
+            if (Array.isArray(saved.namesByCount[12]) && saved.namesByCount[12].length === 12) {
+              state.namesByCount[12] = saved.namesByCount[12];
+            }
+          }
+
+          state.names = state.namesByCount[currentPlayerCount()].slice();
+
+          if (Array.isArray(saved.schedule)) {
+            state.schedule = saved.schedule;
+          }
+          if (saved.scores && typeof saved.scores === "object") {
+            state.scores = saved.scores;
+          }
+          if (typeof saved.randomize === "boolean") {
+            els.randomizeNames.checked = saved.randomize;
+          }
+        } catch (err) {
+          console.warn("Could not restore from localStorage", err);
+        }
+      }
+
+      function wire() {
+        els.modeRadios.forEach((radio) => {
+          radio.addEventListener("change", () => switchMode(getModeValue(), false));
+        });
+        els.generateBtn.addEventListener("click", buildSchedule);
+        els.clearScoresBtn.addEventListener("click", clearScores);
+        els.resetAllBtn.addEventListener("click", resetAll);
+        els.randomizeNames.addEventListener("change", persist);
+      }
+
+      restore();
+      updateSummary();
+      initInputs();
+      wire();
+      renderSchedule();
+      renderRankings();
+      setStatus(state.schedule.length ? "Loaded saved schedule from this browser." : "");
+    })();
+  </script>
+</body>
+</html>
