@@ -127,6 +127,16 @@
       border: 1px solid var(--line);
     }
 
+    select.ui-select {
+      padding: 9px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      font-size: 0.95rem;
+      background: #fff;
+      color: var(--text);
+      min-width: 190px;
+    }
+
     .status {
       margin-top: 10px;
       font-size: 0.92rem;
@@ -326,11 +336,16 @@
   <main class="app">
     <section class="card">
       <h1>Pickleball Round-Robin Mixer</h1>
-      <p class="sub">Choose 2 or 3 courts, enter player names, generate a balanced doubles schedule, add final scores, and track standings.</p>
+      <p class="sub">Choose courts and player count, enter names, generate a balanced doubles schedule, add final scores, and track standings.</p>
 
       <div class="court-picker">
         <label><input type="radio" name="courtMode" value="2" checked> 2 Courts</label>
         <label><input type="radio" name="courtMode" value="3"> 3 Courts</label>
+      </div>
+
+      <div class="controls">
+        <label for="playerCountSelect"><strong>Players:</strong></label>
+        <select id="playerCountSelect" class="ui-select"></select>
       </div>
 
       <p class="tiny" id="modeNote"></p>
@@ -419,7 +434,12 @@
 
   <script>
     (function () {
-      const STORAGE_KEY = "pickleball_mixer_enhanced_v2";
+      const STORAGE_KEY = "pickleball_mixer_enhanced_v4";
+
+      const MODE_OPTIONS = {
+        2: [8, 9],
+        3: [12, 13]
+      };
 
       const els = {
         playerInputs: document.getElementById("playerInputs"),
@@ -437,25 +457,35 @@
         summaryRounds: document.getElementById("summaryRounds"),
         summaryMatches: document.getElementById("summaryMatches"),
         scheduleTitle: document.getElementById("scheduleTitle"),
-        modeRadios: Array.from(document.querySelectorAll('input[name="courtMode"]'))
+        modeRadios: Array.from(document.querySelectorAll('input[name="courtMode"]')),
+        playerCountSelect: document.getElementById("playerCountSelect")
       };
 
       const state = {
         courts: 2,
+        playerCount: 8,
         namesByCount: {
           8: Array.from({ length: 8 }, (_, i) => `Player ${i + 1}`),
-          12: Array.from({ length: 12 }, (_, i) => `Player ${i + 1}`)
+          9: Array.from({ length: 9 }, (_, i) => `Player ${i + 1}`),
+          12: Array.from({ length: 12 }, (_, i) => `Player ${i + 1}`),
+          13: Array.from({ length: 13 }, (_, i) => `Player ${i + 1}`)
         },
         names: Array.from({ length: 8 }, (_, i) => `Player ${i + 1}`),
         schedule: [],
+        byes: {},
         scores: {}
       };
 
       function currentPlayerCount() {
-        return state.courts * 4;
+        return state.playerCount;
       }
 
       function currentRounds() {
+        const p = currentPlayerCount();
+        return p % 2 === 0 ? p - 1 : p;
+      }
+
+      function currentGamesPerPlayer() {
         return currentPlayerCount() - 1;
       }
 
@@ -466,14 +496,24 @@
       function updateSummary() {
         const players = currentPlayerCount();
         const rounds = currentRounds();
+
         els.summaryCourts.textContent = String(state.courts);
         els.summaryPlayers.textContent = String(players);
         els.summaryRounds.textContent = String(rounds);
         els.summaryMatches.textContent = String(currentMatchCount());
         els.scheduleTitle.textContent = `Schedule (${state.courts} Courts × ${rounds} Rounds)`;
-        els.modeNote.textContent = state.courts === 2
-          ? "2 courts = 8 players and 7 rounds."
-          : "3 courts = 12 players and 11 rounds.";
+
+        if (state.courts === 2 && players === 8) {
+          els.modeNote.textContent = "2 courts = 8 players and 7 rounds. Goal: partner each player once, oppose each player twice, rotate courts, and balance A/B sides.";
+        } else if (state.courts === 2 && players === 9) {
+          els.modeNote.textContent = "2 courts = 9 players and 9 rounds. One player sits each round, each player sits exactly once, with the same partner/opponent balance targets.";
+        } else if (state.courts === 3 && players === 12) {
+          els.modeNote.textContent = "3 courts = 12 players and 11 rounds. Goal: partner each player once, oppose each player twice, rotate courts, and balance A/B sides.";
+        } else if (state.courts === 3 && players === 13) {
+          els.modeNote.textContent = "3 courts = 13 players and 13 rounds. One player sits each round, each player sits exactly once, with the same partner/opponent balance targets.";
+        } else {
+          els.modeNote.textContent = "";
+        }
       }
 
       function setStatus(message, type) {
@@ -501,6 +541,23 @@
         return out;
       }
 
+      function choose(arr, k) {
+        const out = [];
+        function rec(start, path) {
+          if (path.length === k) {
+            out.push(path.slice());
+            return;
+          }
+          for (let i = start; i < arr.length; i += 1) {
+            path.push(arr[i]);
+            rec(i + 1, path);
+            path.pop();
+          }
+        }
+        rec(0, []);
+        return out;
+      }
+
       function getModeValue() {
         const selected = els.modeRadios.find(r => r.checked);
         return selected ? parseInt(selected.value, 10) : 2;
@@ -513,19 +570,69 @@
         return inputs.map((input, i) => input.value || `Player ${i + 1}`);
       }
 
+      function populatePlayerCountSelect() {
+        const allowed = MODE_OPTIONS[state.courts];
+        els.playerCountSelect.innerHTML = "";
+
+        allowed.forEach((count) => {
+          const option = document.createElement("option");
+          option.value = String(count);
+          option.textContent = count % 2 === 0
+            ? `${count} Players`
+            : `${count} Players (1 sits each round)`;
+          els.playerCountSelect.appendChild(option);
+        });
+
+        if (!allowed.includes(state.playerCount)) {
+          state.playerCount = allowed[0];
+        }
+
+        els.playerCountSelect.value = String(state.playerCount);
+      }
+
       function switchMode(newCourts, fromRestore) {
         state.namesByCount[currentPlayerCount()] = getInputNames();
         state.courts = newCourts;
+        populatePlayerCountSelect();
+
         const count = currentPlayerCount();
         state.names = (state.namesByCount[count] && state.namesByCount[count].length === count)
           ? state.namesByCount[count].slice()
           : Array.from({ length: count }, (_, i) => `Player ${i + 1}`);
+
         state.schedule = [];
+        state.byes = {};
         state.scores = {};
+
         updateSummary();
         initInputs();
         renderSchedule();
         renderRankings();
+
+        if (!fromRestore) {
+          persist();
+          setStatus("", "");
+        }
+      }
+
+      function switchPlayerCount(newCount, fromRestore) {
+        state.namesByCount[currentPlayerCount()] = getInputNames();
+        state.playerCount = newCount;
+
+        const count = currentPlayerCount();
+        state.names = (state.namesByCount[count] && state.namesByCount[count].length === count)
+          ? state.namesByCount[count].slice()
+          : Array.from({ length: count }, (_, i) => `Player ${i + 1}`);
+
+        state.schedule = [];
+        state.byes = {};
+        state.scores = {};
+
+        updateSummary();
+        initInputs();
+        renderSchedule();
+        renderRankings();
+
         if (!fromRestore) {
           persist();
           setStatus("", "");
@@ -535,7 +642,7 @@
       function initInputs() {
         const count = currentPlayerCount();
         els.playerInputs.innerHTML = "";
-        els.playerInputs.className = `players-grid ${count === 8 ? "cols-4" : "cols-3"}`;
+        els.playerInputs.className = `players-grid ${count <= 9 ? "cols-4" : "cols-3"}`;
 
         for (let i = 0; i < count; i += 1) {
           const input = document.createElement("input");
@@ -556,6 +663,7 @@
       function normalizeNames() {
         const count = currentPlayerCount();
         const raw = getInputNames();
+
         const trimmed = raw.map((n, i) => {
           const val = (n || "").trim();
           return val || `Player ${i + 1}`;
@@ -576,51 +684,19 @@
         return `${state.names[ids[0]]} & ${state.names[ids[1]]}`;
       }
 
-      function generatePartnerRounds(order) {
-        const arr = order.slice();
-        const rounds = [];
-        const n = arr.length;
-
-        for (let r = 0; r < n - 1; r += 1) {
-          const pairs = [];
-          for (let i = 0; i < n / 2; i += 1) {
-            pairs.push([arr[i], arr[n - 1 - i]]);
-          }
-          rounds.push(pairs);
-
-          const fixed = arr[0];
-          const rest = arr.slice(1);
-          rest.unshift(rest.pop());
-          arr.splice(0, arr.length, fixed, ...rest);
-        }
-
-        return rounds;
-      }
-
-      function enumerateMatchings(pairs) {
-        if (pairs.length === 0) return [[]];
-        const first = pairs[0];
-        const results = [];
-        for (let i = 1; i < pairs.length; i += 1) {
-          const remaining = [];
-          for (let j = 1; j < pairs.length; j += 1) {
-            if (j !== i) remaining.push(pairs[j]);
-          }
-          const tails = enumerateMatchings(remaining);
-          tails.forEach((tail) => {
-            results.push([[first, pairs[i]], ...tail]);
-          });
-        }
-        return results;
+      function pairKey(a, b) {
+        return a < b ? `${a}-${b}` : `${b}-${a}`;
       }
 
       function createEmptyCounts(playerCount, courts) {
         return {
+          partner: Array.from({ length: playerCount }, () => Array(playerCount).fill(0)),
           opp: Array.from({ length: playerCount }, () => Array(playerCount).fill(0)),
           sameCourt: Array.from({ length: playerCount }, () => Array(playerCount).fill(0)),
           court: Array.from({ length: playerCount }, () => Array(courts).fill(0)),
           sideA: Array(playerCount).fill(0),
           sideB: Array(playerCount).fill(0),
+          byes: Array(playerCount).fill(0),
           recentCourtMates1: Array.from({ length: playerCount }, () => new Set()),
           recentCourtMates2: Array.from({ length: playerCount }, () => new Set()),
           recentOpponents1: Array.from({ length: playerCount }, () => new Set()),
@@ -628,78 +704,31 @@
         };
       }
 
-      function countIncrementalPenalty(teamA, teamB, courtIndex, counts, rounds, courts, roundNumber) {
-        let score = 0;
-        const onCourt = [...teamA, ...teamB];
-        const targetCourt = rounds / courts;
-        const targetSide = rounds / 2;
-
-        for (let i = 0; i < onCourt.length; i += 1) {
-          const p = onCourt[i];
-
-          const beforeCourt = counts.court[p][courtIndex];
-          const afterCourt = beforeCourt + 1;
-          score += (Math.abs(afterCourt - targetCourt) - Math.abs(beforeCourt - targetCourt)) * 10;
-
-          const beforeA = counts.sideA[p];
-          const beforeB = counts.sideB[p];
-
-          if (teamA.includes(p)) {
-            const afterA = beforeA + 1;
-            score += (Math.abs(afterA - targetSide) - Math.abs(beforeA - targetSide)) * 6;
-          } else {
-            const afterB = beforeB + 1;
-            score += (Math.abs(afterB - targetSide) - Math.abs(beforeB - targetSide)) * 6;
-          }
-        }
-
-        for (let i = 0; i < teamA.length; i += 1) {
-          for (let j = 0; j < teamB.length; j += 1) {
-            const p = teamA[i];
-            const q = teamB[j];
-            const beforeOpp = counts.opp[p][q];
-            const afterOpp = beforeOpp + 1;
-
-            score += afterOpp * afterOpp * 12;
-
-            if (counts.recentOpponents1[p].has(q)) score += 240;
-            if (counts.recentOpponents2[p].has(q)) score += 90;
-
-            if (afterOpp > 2) score += (afterOpp - 2) * 120;
-          }
-        }
-
-        for (let i = 0; i < onCourt.length; i += 1) {
-          for (let j = i + 1; j < onCourt.length; j += 1) {
-            const p = onCourt[i];
-            const q = onCourt[j];
-            const beforeSame = counts.sameCourt[p][q];
-            const afterSame = beforeSame + 1;
-
-            score += afterSame * afterSame * 9;
-
-            if (counts.recentCourtMates1[p].has(q)) score += 320;
-            if (counts.recentCourtMates2[p].has(q)) score += 140;
-
-            if (afterSame > 3) score += (afterSame - 3) * 140;
-          }
-        }
-
-        if (roundNumber <= 4) {
-          for (let i = 0; i < onCourt.length; i += 1) {
-            for (let j = i + 1; j < onCourt.length; j += 1) {
-              const p = onCourt[i];
-              const q = onCourt[j];
-              score += counts.sameCourt[p][q] * 40;
-            }
-          }
-        }
-
-        return score;
+      function deepCloneCounts(counts) {
+        return {
+          partner: counts.partner.map(row => row.slice()),
+          opp: counts.opp.map(row => row.slice()),
+          sameCourt: counts.sameCourt.map(row => row.slice()),
+          court: counts.court.map(row => row.slice()),
+          sideA: counts.sideA.slice(),
+          sideB: counts.sideB.slice(),
+          byes: counts.byes.slice(),
+          recentCourtMates1: counts.recentCourtMates1.map(set => new Set(set)),
+          recentCourtMates2: counts.recentCourtMates2.map(set => new Set(set)),
+          recentOpponents1: counts.recentOpponents1.map(set => new Set(set)),
+          recentOpponents2: counts.recentOpponents2.map(set => new Set(set))
+        };
       }
 
       function applyMatchToCounts(teamA, teamB, courtIndex, counts, roundTracker) {
         const all = [...teamA, ...teamB];
+        const [a1, a2] = teamA;
+        const [b1, b2] = teamB;
+
+        counts.partner[a1][a2] += 1;
+        counts.partner[a2][a1] += 1;
+        counts.partner[b1][b2] += 1;
+        counts.partner[b2][b1] += 1;
 
         all.forEach((p) => {
           counts.court[p][courtIndex] += 1;
@@ -744,44 +773,275 @@
         counts.recentOpponents1 = roundTracker.opponents.map(set => new Set(set));
       }
 
-      function evaluateFullSchedule(schedule, playerCount, courts) {
+      function countIncrementalPenalty(teamA, teamB, courtIndex, counts, playerCount, courts) {
+        let score = 0;
+        const all = [...teamA, ...teamB];
+        const gamesPerPlayer = playerCount - 1;
+        const targetCourt = gamesPerPlayer / courts;
+        const targetSide = gamesPerPlayer / 2;
+
+        for (let i = 0; i < all.length; i += 1) {
+          const p = all[i];
+
+          const beforeCourt = counts.court[p][courtIndex];
+          const afterCourt = beforeCourt + 1;
+          score += (Math.abs(afterCourt - targetCourt) - Math.abs(beforeCourt - targetCourt)) * 45;
+
+          const beforeA = counts.sideA[p];
+          const beforeB = counts.sideB[p];
+
+          if (teamA.includes(p)) {
+            const afterA = beforeA + 1;
+            score += (Math.abs(afterA - targetSide) - Math.abs(beforeA - targetSide)) * 30;
+          } else {
+            const afterB = beforeB + 1;
+            score += (Math.abs(afterB - targetSide) - Math.abs(beforeB - targetSide)) * 30;
+          }
+        }
+
+        for (let i = 0; i < teamA.length; i += 1) {
+          for (let j = 0; j < teamB.length; j += 1) {
+            const p = teamA[i];
+            const q = teamB[j];
+            const afterOpp = counts.opp[p][q] + 1;
+
+            score += afterOpp * afterOpp * 28;
+            if (counts.recentOpponents1[p].has(q)) score += 520;
+            if (counts.recentOpponents2[p].has(q)) score += 180;
+            if (afterOpp > 2) score += 1000000;
+          }
+        }
+
+        for (let i = 0; i < all.length; i += 1) {
+          for (let j = i + 1; j < all.length; j += 1) {
+            const p = all[i];
+            const q = all[j];
+            const afterSame = counts.sameCourt[p][q] + 1;
+
+            score += afterSame * afterSame * 14;
+            if (counts.recentCourtMates1[p].has(q)) score += 380;
+            if (counts.recentCourtMates2[p].has(q)) score += 140;
+            if (afterSame > 3) score += 360;
+          }
+        }
+
+        return score;
+      }
+
+      function enumerateRoundArrangements(roundPairs, courts, playerCount, counts) {
+        const pairIds = roundPairs.map((_, i) => i);
+        const pairingsOfPairs = enumerateMatchings(pairIds);
+        const courtIndexes = Array.from({ length: courts }, (_, i) => i);
+        const courtPerms = permutations(courtIndexes);
+        const results = [];
+
+        for (let m = 0; m < pairingsOfPairs.length; m += 1) {
+          const pairGrouping = pairingsOfPairs[m];
+          const orientationCount = 1 << courts;
+
+          for (let cp = 0; cp < courtPerms.length; cp += 1) {
+            const courtOrder = courtPerms[cp];
+
+            for (let mask = 0; mask < orientationCount; mask += 1) {
+              const tempCounts = deepCloneCounts(counts);
+              const roundTracker = {
+                courtMates: Array.from({ length: playerCount }, () => new Set()),
+                opponents: Array.from({ length: playerCount }, () => new Set())
+              };
+
+              let score = 0;
+              let valid = true;
+              const assignments = [];
+
+              for (let idx = 0; idx < pairGrouping.length; idx += 1) {
+                let pair1 = roundPairs[pairGrouping[idx][0]].slice();
+                let pair2 = roundPairs[pairGrouping[idx][1]].slice();
+
+                if ((mask >> idx) & 1) {
+                  const swap = pair1;
+                  pair1 = pair2;
+                  pair2 = swap;
+                }
+
+                const courtIndex = courtOrder[idx];
+                score += countIncrementalPenalty(pair1, pair2, courtIndex, tempCounts, playerCount, courts);
+
+                applyMatchToCounts(pair1, pair2, courtIndex, tempCounts, roundTracker);
+
+                assignments.push({
+                  court: courtIndex + 1,
+                  teamA: pair1,
+                  teamB: pair2
+                });
+              }
+
+              if (!valid) continue;
+
+              finalizeRecentTracking(tempCounts, roundTracker);
+
+              results.push({
+                score,
+                assignments: assignments.sort((a, b) => a.court - b.court),
+                counts: tempCounts
+              });
+            }
+          }
+        }
+
+        results.sort((a, b) => a.score - b.score);
+        return results;
+      }
+
+      function pairPartitions(players) {
+        if (players.length === 0) return [[]];
+
+        const first = players[0];
+        const out = [];
+
+        for (let i = 1; i < players.length; i += 1) {
+          const pair = [first, players[i]];
+          const rest = players.filter((_, idx) => idx !== 0 && idx !== i);
+          const tails = pairPartitions(rest);
+          tails.forEach((tail) => {
+            out.push([pair, ...tail]);
+          });
+        }
+
+        return out;
+      }
+
+      function generateRoundPairCandidates(activePlayers, counts) {
+        const allPairings = pairPartitions(activePlayers);
+        const candidates = [];
+
+        for (let i = 0; i < allPairings.length; i += 1) {
+          const pairs = allPairings[i];
+          let valid = true;
+          let score = 0;
+
+          for (let j = 0; j < pairs.length; j += 1) {
+            const [a, b] = pairs[j];
+            const partneredAlready = counts.partner[a][b];
+            if (partneredAlready > 0) {
+              valid = false;
+              break;
+            }
+            score += partneredAlready * 1000000;
+          }
+
+          if (!valid) continue;
+
+          for (let i1 = 0; i1 < pairs.length; i1 += 1) {
+            const [a, b] = pairs[i1];
+            for (let i2 = i1 + 1; i2 < pairs.length; i2 += 1) {
+              const [c, d] = pairs[i2];
+              score += counts.opp[a][c] * 20;
+              score += counts.opp[a][d] * 20;
+              score += counts.opp[b][c] * 20;
+              score += counts.opp[b][d] * 20;
+            }
+          }
+
+          candidates.push({ pairs, score });
+        }
+
+        candidates.sort((a, b) => a.score - b.score);
+        return candidates;
+      }
+
+      function buildByeOrder(playerCount, randomizeNames) {
+        const arr = Array.from({ length: playerCount }, (_, i) => i);
+        return randomizeNames ? shuffle(arr) : arr;
+      }
+
+      function validateSchedule(schedule, byes, playerCount, courts) {
         const counts = createEmptyCounts(playerCount, courts);
-        const rounds = playerCount - 1;
+        const expectedByeCount = playerCount % 2 === 1 ? 1 : 0;
+        const rounds = currentRounds();
 
         for (let r = 1; r <= rounds; r += 1) {
           const roundMatches = schedule.filter(m => m.round === r);
-          const roundTracker = {
-            courtMates: Array.from({ length: playerCount }, () => new Set()),
-            opponents: Array.from({ length: playerCount }, () => new Set())
-          };
+          if (roundMatches.length !== courts) return { ok: false, reason: `Round ${r} has wrong number of courts.` };
 
+          const active = new Set();
           roundMatches.forEach((m) => {
-            applyMatchToCounts(m.teamA, m.teamB, m.court - 1, counts, roundTracker);
+            [...m.teamA, ...m.teamB].forEach(p => active.add(p));
+            applyMatchToCounts(m.teamA, m.teamB, m.court - 1, counts, null);
           });
 
-          finalizeRecentTracking(counts, roundTracker);
+          const bye = byes[r];
+          if (expectedByeCount === 1) {
+            if (bye == null) return { ok: false, reason: `Round ${r} is missing a sit-out player.` };
+            if (active.has(bye)) return { ok: false, reason: `Round ${r} sit-out player is also playing.` };
+          } else {
+            if (bye != null) return { ok: false, reason: `Round ${r} should not have a sit-out player.` };
+          }
         }
 
-        let score = 0;
-        const targetCourt = rounds / courts;
-
         for (let p = 0; p < playerCount; p += 1) {
-          for (let c = 0; c < courts; c += 1) {
-            score += Math.pow(counts.court[p][c] - targetCourt, 2) * 12;
+          if (expectedByeCount === 1 && counts.byes[p] !== 0) {
+            // counts.byes not populated in validation loop; bye checking handled below
           }
-          score += Math.pow(counts.sideA[p] - counts.sideB[p], 2) * 8;
+        }
+
+        if (expectedByeCount === 1) {
+          const byeCounts = Array(playerCount).fill(0);
+          Object.values(byes).forEach((p) => {
+            if (Number.isInteger(p)) byeCounts[p] += 1;
+          });
+          for (let p = 0; p < playerCount; p += 1) {
+            if (byeCounts[p] !== 1) return { ok: false, reason: "Each player must sit exactly once." };
+          }
         }
 
         for (let i = 0; i < playerCount; i += 1) {
           for (let j = i + 1; j < playerCount; j += 1) {
-            const opp = counts.opp[i][j];
+            if (counts.partner[i][j] !== 1) {
+              return { ok: false, reason: "Not all player pairs are partners exactly once." };
+            }
+            if (counts.opp[i][j] !== 2) {
+              return { ok: false, reason: "Not all player pairs are opponents exactly twice." };
+            }
+          }
+        }
+
+        return { ok: true };
+      }
+
+      function evaluateFullSchedule(schedule, byes, playerCount, courts) {
+        const valid = validateSchedule(schedule, byes, playerCount, courts);
+        if (!valid.ok) return Infinity;
+
+        const counts = createEmptyCounts(playerCount, courts);
+        schedule.forEach((m) => {
+          applyMatchToCounts(m.teamA, m.teamB, m.court - 1, counts, null);
+        });
+
+        if (playerCount % 2 === 1) {
+          Object.values(byes).forEach((p) => {
+            if (Number.isInteger(p)) counts.byes[p] += 1;
+          });
+        }
+
+        let score = 0;
+        const gamesPerPlayer = playerCount - 1;
+        const targetCourt = gamesPerPlayer / courts;
+        const targetSide = gamesPerPlayer / 2;
+
+        for (let p = 0; p < playerCount; p += 1) {
+          for (let c = 0; c < courts; c += 1) {
+            score += Math.pow(counts.court[p][c] - targetCourt, 2) * 90;
+          }
+
+          score += Math.pow(counts.sideA[p] - targetSide, 2) * 70;
+          score += Math.pow(counts.sideB[p] - targetSide, 2) * 70;
+          score += Math.pow(counts.sideA[p] - counts.sideB[p], 2) * 60;
+        }
+
+        for (let i = 0; i < playerCount; i += 1) {
+          for (let j = i + 1; j < playerCount; j += 1) {
             const same = counts.sameCourt[i][j];
-
-            score += Math.pow(opp, 2) * 6;
-            score += Math.pow(same, 2) * 5;
-
-            if (opp > 2) score += Math.pow(opp - 2, 2) * 220;
-            if (same > 3) score += Math.pow(same - 3, 2) * 260;
+            score += Math.pow(same - 3, 2) * 120;
           }
         }
 
@@ -789,89 +1049,51 @@
       }
 
       function buildBestSchedule(playerCount, courts, randomizeNames) {
-        const rounds = playerCount - 1;
-        const courtIndexes = Array.from({ length: courts }, (_, i) => i);
-        const courtPerms = permutations(courtIndexes);
-        const tries = playerCount === 8 ? 250 : 2200;
+        const rounds = playerCount % 2 === 0 ? playerCount - 1 : playerCount;
+        const tries = playerCount <= 9 ? 160 : 300;
 
         let bestSchedule = null;
+        let bestByes = {};
         let bestScore = Infinity;
 
         for (let tryIndex = 0; tryIndex < tries; tryIndex += 1) {
-          const baseOrder = Array.from({ length: playerCount }, (_, i) => i);
-          const order = randomizeNames ? shuffle(baseOrder) : baseOrder;
-          const partnerRounds = generatePartnerRounds(order);
           const counts = createEmptyCounts(playerCount, courts);
           const trialSchedule = [];
-          let matchId = 1;
+          const trialByes = {};
           let failed = false;
+          let matchId = 1;
+
+          const byeOrder = playerCount % 2 === 1
+            ? buildByeOrder(playerCount, randomizeNames)
+            : [];
 
           for (let r = 0; r < rounds; r += 1) {
-            const pairs = partnerRounds[r];
-            const possibleMatchings = enumerateMatchings(pairs);
-            const roundTracker = {
-              courtMates: Array.from({ length: playerCount }, () => new Set()),
-              opponents: Array.from({ length: playerCount }, () => new Set())
-            };
+            let activePlayers = Array.from({ length: playerCount }, (_, i) => i);
 
-            let bestRoundChoice = null;
-            let bestRoundScore = Infinity;
-
-            for (let m = 0; m < possibleMatchings.length; m += 1) {
-              const matching = possibleMatchings[m];
-
-              for (let cp = 0; cp < courtPerms.length; cp += 1) {
-                const courtOrder = courtPerms[cp];
-                const orientationCount = 1 << courts;
-
-                for (let mask = 0; mask < orientationCount; mask += 1) {
-                  let tempScore = 0;
-                  const assignments = [];
-
-                  for (let idx = 0; idx < matching.length; idx += 1) {
-                    let pair1 = matching[idx][0];
-                    let pair2 = matching[idx][1];
-
-                    if ((mask >> idx) & 1) {
-                      const swap = pair1;
-                      pair1 = pair2;
-                      pair2 = swap;
-                    }
-
-                    const courtIndex = courtOrder[idx];
-                    tempScore += countIncrementalPenalty(
-                      pair1,
-                      pair2,
-                      courtIndex,
-                      counts,
-                      rounds,
-                      courts,
-                      r + 1
-                    );
-
-                    assignments.push({
-                      court: courtIndex + 1,
-                      teamA: pair1.slice(),
-                      teamB: pair2.slice()
-                    });
-                  }
-
-                  if (tempScore < bestRoundScore) {
-                    bestRoundScore = tempScore;
-                    bestRoundChoice = assignments;
-                  }
-                }
-              }
+            if (playerCount % 2 === 1) {
+              const bye = byeOrder[r];
+              trialByes[r + 1] = bye;
+              activePlayers = activePlayers.filter(p => p !== bye);
             }
 
-            if (!bestRoundChoice) {
+            const pairCandidates = generateRoundPairCandidates(activePlayers, counts);
+            if (!pairCandidates.length) {
               failed = true;
               break;
             }
 
-            bestRoundChoice
-              .sort((a, b) => a.court - b.court)
-              .forEach((assignment) => {
+            const pairPool = pairCandidates.slice(0, Math.min(24, pairCandidates.length));
+            let roundPlaced = false;
+
+            for (let pc = 0; pc < pairPool.length && !roundPlaced; pc += 1) {
+              const pairCandidate = pairPool[pc];
+              const arrangements = enumerateRoundArrangements(pairCandidate.pairs, courts, playerCount, counts);
+              if (!arrangements.length) continue;
+
+              const arrangementPool = arrangements.slice(0, Math.min(18, arrangements.length));
+              const chosen = arrangementPool[Math.floor(Math.random() * arrangementPool.length)];
+
+              chosen.assignments.forEach((assignment) => {
                 trialSchedule.push({
                   id: `m${matchId++}`,
                   round: r + 1,
@@ -879,29 +1101,42 @@
                   teamA: assignment.teamA,
                   teamB: assignment.teamB
                 });
-
-                applyMatchToCounts(
-                  assignment.teamA,
-                  assignment.teamB,
-                  assignment.court - 1,
-                  counts,
-                  roundTracker
-                );
               });
 
-            finalizeRecentTracking(counts, roundTracker);
+              counts.partner = chosen.counts.partner.map(row => row.slice());
+              counts.opp = chosen.counts.opp.map(row => row.slice());
+              counts.sameCourt = chosen.counts.sameCourt.map(row => row.slice());
+              counts.court = chosen.counts.court.map(row => row.slice());
+              counts.sideA = chosen.counts.sideA.slice();
+              counts.sideB = chosen.counts.sideB.slice();
+              counts.recentCourtMates1 = chosen.counts.recentCourtMates1.map(set => new Set(set));
+              counts.recentCourtMates2 = chosen.counts.recentCourtMates2.map(set => new Set(set));
+              counts.recentOpponents1 = chosen.counts.recentOpponents1.map(set => new Set(set));
+              counts.recentOpponents2 = chosen.counts.recentOpponents2.map(set => new Set(set));
+
+              roundPlaced = true;
+            }
+
+            if (!roundPlaced) {
+              failed = true;
+              break;
+            }
           }
 
           if (failed) continue;
 
-          const finalScore = evaluateFullSchedule(trialSchedule, playerCount, courts);
+          const finalScore = evaluateFullSchedule(trialSchedule, trialByes, playerCount, courts);
           if (finalScore < bestScore) {
             bestScore = finalScore;
             bestSchedule = trialSchedule;
+            bestByes = trialByes;
           }
         }
 
-        return bestSchedule;
+        return {
+          schedule: bestSchedule,
+          byes: bestByes
+        };
       }
 
       function buildSchedule() {
@@ -909,26 +1144,35 @@
         if (!names) return;
 
         setStatus("Generating balanced schedule…", "");
+
         const players = currentPlayerCount();
         const courts = state.courts;
-        const schedule = buildBestSchedule(players, courts, els.randomizeNames.checked);
+        const result = buildBestSchedule(players, courts, els.randomizeNames.checked);
 
-        if (!schedule || !schedule.length) {
-          setStatus("Could not generate a schedule. Please try again.", "err");
+        if (!result.schedule || !result.schedule.length) {
+          setStatus("Could not generate a valid schedule this time. Click Generate Schedule again.", "err");
           return;
         }
 
-        state.schedule = schedule;
+        const validation = validateSchedule(result.schedule, result.byes, players, courts);
+        if (!validation.ok) {
+          setStatus(`Generated schedule failed validation: ${validation.reason} Click Generate Schedule again.`, "err");
+          return;
+        }
+
+        state.schedule = result.schedule;
+        state.byes = result.byes || {};
         state.scores = {};
+
         persist();
         renderSchedule();
         renderRankings();
-        setStatus(
-          courts === 2
-            ? "Balanced 2-court schedule generated. Enter scores from the dropdowns."
-            : "Balanced 3-court schedule generated with stronger round-to-round mixing. Enter scores from the dropdowns.",
-          "ok"
-        );
+
+        if (players % 2 === 1) {
+          setStatus("Balanced schedule generated. Each player partners every other player once, opposes every other player twice, rotates courts and sides, and sits exactly once.", "ok");
+        } else {
+          setStatus("Balanced schedule generated. Each player partners every other player once, opposes every other player twice, and rotates courts and sides as evenly as possible.", "ok");
+        }
       }
 
       function createScoreSelect(matchId, side, value) {
@@ -982,7 +1226,7 @@
         if (!state.schedule.length) {
           const empty = document.createElement("p");
           empty.className = "sub";
-          empty.textContent = "No schedule yet. Choose courts, enter names, and click Generate Schedule.";
+          empty.textContent = "No schedule yet. Choose courts and players, enter names, and click Generate Schedule.";
           els.schedule.appendChild(empty);
           return;
         }
@@ -993,51 +1237,63 @@
           rounds[match.round].push(match);
         });
 
-        Object.keys(rounds).sort((a, b) => Number(a) - Number(b)).forEach((roundKey) => {
-          const block = document.createElement("section");
-          block.className = "round-block";
+        Object.keys(rounds)
+          .sort((a, b) => Number(a) - Number(b))
+          .forEach((roundKey) => {
+            const block = document.createElement("section");
+            block.className = "round-block";
 
-          const title = document.createElement("div");
-          title.className = "round-title";
-          title.textContent = `Round ${roundKey}`;
+            const title = document.createElement("div");
+            title.className = "round-title";
+            title.textContent = `Round ${roundKey}`;
 
-          const grid = document.createElement("div");
-          grid.className = "matches-grid";
+            block.appendChild(title);
 
-          rounds[roundKey]
-            .sort((a, b) => a.court - b.court)
-            .forEach((match) => {
-              const card = document.createElement("article");
-              card.className = "match";
+            if (state.byes && state.byes[roundKey] != null) {
+              const byeNote = document.createElement("div");
+              byeNote.className = "tiny";
+              byeNote.style.marginBottom = "8px";
+              byeNote.innerHTML = `<strong>Sitting out:</strong> ${state.names[state.byes[roundKey]]}`;
+              block.appendChild(byeNote);
+            }
 
-              const head = document.createElement("div");
-              head.className = "match-head";
-              head.innerHTML = `<strong>Court ${match.court}</strong><span>Side A vs Side B</span>`;
+            const grid = document.createElement("div");
+            grid.className = "matches-grid";
 
-              const teams = document.createElement("div");
-              teams.className = "teams";
-              teams.innerHTML = `<div>${teamLabel(match.teamA)}</div><div class="vs">vs</div><div>${teamLabel(match.teamB)}</div>`;
+            rounds[roundKey]
+              .sort((a, b) => a.court - b.court)
+              .forEach((match) => {
+                const card = document.createElement("article");
+                card.className = "match";
 
-              const scores = document.createElement("div");
-              scores.className = "scores";
+                const head = document.createElement("div");
+                head.className = "match-head";
+                head.innerHTML = `<strong>Court ${match.court}</strong><span>Side A vs Side B</span>`;
 
-              const saved = state.scores[match.id] || { a: null, b: null };
-              scores.appendChild(createScoreSelect(match.id, "a", saved.a));
+                const teams = document.createElement("div");
+                teams.className = "teams";
+                teams.innerHTML = `<div>${teamLabel(match.teamA)}</div><div class="vs">vs</div><div>${teamLabel(match.teamB)}</div>`;
 
-              const dash = document.createElement("div");
-              dash.className = "vs";
-              dash.textContent = "-";
-              scores.appendChild(dash);
+                const scores = document.createElement("div");
+                scores.className = "scores";
 
-              scores.appendChild(createScoreSelect(match.id, "b", saved.b));
+                const saved = state.scores[match.id] || { a: null, b: null };
+                scores.appendChild(createScoreSelect(match.id, "a", saved.a));
 
-              card.append(head, teams, scores);
-              grid.appendChild(card);
-            });
+                const dash = document.createElement("div");
+                dash.className = "vs";
+                dash.textContent = "-";
+                scores.appendChild(dash);
 
-          block.append(title, grid);
-          els.schedule.appendChild(block);
-        });
+                scores.appendChild(createScoreSelect(match.id, "b", saved.b));
+
+                card.append(head, teams, scores);
+                grid.appendChild(card);
+              });
+
+            block.appendChild(grid);
+            els.schedule.appendChild(block);
+          });
       }
 
       function rerenderScheduleNamesOnly() {
@@ -1130,13 +1386,23 @@
       }
 
       function resetAll() {
-        state.namesByCount[8] = Array.from({ length: 8 }, (_, i) => `Player ${i + 1}`);
-        state.namesByCount[12] = Array.from({ length: 12 }, (_, i) => `Player ${i + 1}`);
+        state.namesByCount = {
+          8: Array.from({ length: 8 }, (_, i) => `Player ${i + 1}`),
+          9: Array.from({ length: 9 }, (_, i) => `Player ${i + 1}`),
+          12: Array.from({ length: 12 }, (_, i) => `Player ${i + 1}`),
+          13: Array.from({ length: 13 }, (_, i) => `Player ${i + 1}`)
+        };
+
+        state.playerCount = MODE_OPTIONS[state.courts][0];
+        populatePlayerCountSelect();
         state.names = state.namesByCount[currentPlayerCount()].slice();
         state.schedule = [];
+        state.byes = {};
         state.scores = {};
         els.randomizeNames.checked = true;
+
         persist();
+        updateSummary();
         initInputs();
         renderSchedule();
         renderRankings();
@@ -1147,8 +1413,10 @@
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify({
             courts: state.courts,
+            playerCount: state.playerCount,
             namesByCount: state.namesByCount,
             schedule: state.schedule,
+            byes: state.byes,
             scores: state.scores,
             randomize: els.randomizeNames.checked
           }));
@@ -1161,6 +1429,7 @@
         try {
           const raw = localStorage.getItem(STORAGE_KEY);
           if (!raw) return;
+
           const saved = JSON.parse(raw);
 
           if (saved.courts === 2 || saved.courts === 3) {
@@ -1170,22 +1439,36 @@
           }
 
           if (saved.namesByCount && typeof saved.namesByCount === "object") {
-            if (Array.isArray(saved.namesByCount[8]) && saved.namesByCount[8].length === 8) {
-              state.namesByCount[8] = saved.namesByCount[8];
-            }
-            if (Array.isArray(saved.namesByCount[12]) && saved.namesByCount[12].length === 12) {
-              state.namesByCount[12] = saved.namesByCount[12];
-            }
+            [8, 9, 12, 13].forEach((count) => {
+              if (Array.isArray(saved.namesByCount[count]) && saved.namesByCount[count].length === count) {
+                state.namesByCount[count] = saved.namesByCount[count];
+              }
+            });
           }
 
+          populatePlayerCountSelect();
+
+          if (MODE_OPTIONS[state.courts].includes(saved.playerCount)) {
+            state.playerCount = saved.playerCount;
+          } else {
+            state.playerCount = MODE_OPTIONS[state.courts][0];
+          }
+
+          populatePlayerCountSelect();
           state.names = state.namesByCount[currentPlayerCount()].slice();
 
           if (Array.isArray(saved.schedule)) {
             state.schedule = saved.schedule;
           }
+
+          if (saved.byes && typeof saved.byes === "object") {
+            state.byes = saved.byes;
+          }
+
           if (saved.scores && typeof saved.scores === "object") {
             state.scores = saved.scores;
           }
+
           if (typeof saved.randomize === "boolean") {
             els.randomizeNames.checked = saved.randomize;
           }
@@ -1198,6 +1481,11 @@
         els.modeRadios.forEach((radio) => {
           radio.addEventListener("change", () => switchMode(getModeValue(), false));
         });
+
+        els.playerCountSelect.addEventListener("change", () => {
+          switchPlayerCount(parseInt(els.playerCountSelect.value, 10), false);
+        });
+
         els.generateBtn.addEventListener("click", buildSchedule);
         els.clearScoresBtn.addEventListener("click", clearScores);
         els.resetAllBtn.addEventListener("click", resetAll);
@@ -1205,6 +1493,7 @@
       }
 
       restore();
+      populatePlayerCountSelect();
       updateSummary();
       initInputs();
       wire();
