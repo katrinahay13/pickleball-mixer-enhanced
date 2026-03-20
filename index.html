@@ -432,1058 +432,727 @@
     </section>
   </main>
 
-  <script>
-    (function () {
-      const STORAGE_KEY = "pickleball_mixer_enhanced_v7_exact_balanced";
-
-      const MODE_OPTIONS = {
-        2: [8, 9],
-        3: [12, 13]
-      };
-
-      // Exact partner/opponent schedules.
-      // Every pair partners once and opposes twice.
-      // Odd player counts also give exactly one bye each.
-      const TEMPLATE_SPECS = {
-        8: {
-          courts: 2,
-          rounds: [
-            "H+G:F+C | B+A:D+E",
-            "G+D:H+E | C+B:F+A",
-            "H+C:E+B | D+A:G+F",
-            "E+G:B+F | A+C:D+H",
-            "A+E:C+G | F+H:B+D",
-            "C+D:G+B | E+F:H+A",
-            "D+F:E+C | B+H:A+G"
-          ]
-        },
-        9: {
-          courts: 2,
-          rounds: [
-            "bye:A | B+C:D+G | E+I:F+H",
-            "bye:B | C+A:E+H | F+G:D+I",
-            "bye:C | A+B:F+I | D+H:E+G",
-            "bye:D | E+F:G+A | H+C:I+B",
-            "bye:E | F+D:H+B | I+A:G+C",
-            "bye:F | D+E:I+C | G+B:H+A",
-            "bye:G | H+I:A+D | B+F:C+E",
-            "bye:H | I+G:B+E | C+D:A+F",
-            "bye:I | G+H:C+F | A+E:B+D"
-          ]
-        },
-        12: {
-          courts: 3,
-          rounds: [
-            "L+A:I+J | B+H:C+F | D+K:E+G",
-            "L+B:J+K | C+I:D+G | E+A:F+H",
-            "L+C:K+A | D+J:E+H | F+B:G+I",
-            "L+D:A+B | E+K:F+I | G+C:H+J",
-            "L+E:B+C | F+A:G+J | H+D:I+K",
-            "L+F:C+D | G+B:H+K | I+E:J+A",
-            "L+G:D+E | H+C:I+A | J+F:K+B",
-            "L+H:E+F | I+D:J+B | K+G:A+C",
-            "L+I:F+G | J+E:K+C | A+H:B+D",
-            "L+J:G+H | K+F:A+D | B+I:C+E",
-            "L+K:H+I | A+G:B+E | C+J:D+F"
-          ]
-        },
-        13: {
-          courts: 3,
-          rounds: [
-            "bye:A | E+M:K+H | B+I:D+L | F+J:G+C",
-            "bye:E | B+A:G+J | D+M:F+I | K+L:C+H",
-            "bye:B | D+E:C+L | F+A:K+M | G+I:H+J",
-            "bye:D | F+B:H+I | K+E:G+A | C+M:J+L",
-            "bye:F | K+D:J+M | G+B:C+E | H+A:L+I",
-            "bye:K | G+F:L+A | C+D:H+B | J+E:I+M",
-            "bye:G | C+K:I+E | H+F:J+D | L+B:M+A",
-            "bye:C | H+G:M+B | J+K:L+F | I+D:A+E",
-            "bye:H | J+C:A+D | L+G:I+K | M+F:E+B",
-            "bye:J | L+H:E+F | I+C:M+G | A+K:B+D",
-            "bye:L | I+J:B+K | M+H:A+C | E+G:D+F",
-            "bye:I | M+L:D+G | A+J:E+H | B+C:F+K",
-            "bye:M | A+I:F+C | E+L:B+J | D+H:K+G"
-          ]
-        }
-      };
-
-      const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
-      const els = {
-        playerInputs: document.getElementById("playerInputs"),
-        modeNote: document.getElementById("modeNote"),
-        randomizeNames: document.getElementById("randomizeNames"),
-        generateBtn: document.getElementById("generateBtn"),
-        clearScoresBtn: document.getElementById("clearScoresBtn"),
-        resetAllBtn: document.getElementById("resetAllBtn"),
-        schedule: document.getElementById("schedule"),
-        winsTable: document.getElementById("winsTable"),
-        pointsTable: document.getElementById("pointsTable"),
-        status: document.getElementById("status"),
-        summaryCourts: document.getElementById("summaryCourts"),
-        summaryPlayers: document.getElementById("summaryPlayers"),
-        summaryRounds: document.getElementById("summaryRounds"),
-        summaryMatches: document.getElementById("summaryMatches"),
-        scheduleTitle: document.getElementById("scheduleTitle"),
-        modeRadios: Array.from(document.querySelectorAll('input[name="courtMode"]')),
-        playerCountSelect: document.getElementById("playerCountSelect")
-      };
-
-      const state = {
-        courts: 2,
-        playerCount: 8,
-        namesByCount: {
-          8: Array.from({ length: 8 }, (_, i) => `Player ${i + 1}`),
-          9: Array.from({ length: 9 }, (_, i) => `Player ${i + 1}`),
-          12: Array.from({ length: 12 }, (_, i) => `Player ${i + 1}`),
-          13: Array.from({ length: 13 }, (_, i) => `Player ${i + 1}`)
-        },
-        names: Array.from({ length: 8 }, (_, i) => `Player ${i + 1}`),
-        schedule: [],
-        byes: {},
-        scores: {}
-      };
-
-      function currentPlayerCount() {
-        return state.playerCount;
-      }
-
-      function currentRounds() {
-        return TEMPLATE_SPECS[currentPlayerCount()].rounds.length;
-      }
-
-      function currentMatchCount() {
-        return currentRounds() * state.courts;
-      }
-
-      function roundsPlayedPerPerson(playerCount) {
-        return playerCount - 1;
-      }
-
-      function updateSummary() {
-        const players = currentPlayerCount();
-        const rounds = currentRounds();
-
-        els.summaryCourts.textContent = String(state.courts);
-        els.summaryPlayers.textContent = String(players);
-        els.summaryRounds.textContent = String(rounds);
-        els.summaryMatches.textContent = String(currentMatchCount());
-        els.scheduleTitle.textContent = `Schedule (${state.courts} Courts × ${rounds} Rounds)`;
-
-        if (state.courts === 2 && players === 8) {
-          els.modeNote.textContent = "Exact schedule: partner each player once, oppose each player twice, then balance courts and A/B side as much as possible.";
-        } else if (state.courts === 2 && players === 9) {
-          els.modeNote.textContent = "Exact schedule: partner each player once, oppose each player twice, and each player sits exactly once.";
-        } else if (state.courts === 3 && players === 12) {
-          els.modeNote.textContent = "Exact schedule: partner each player once, oppose each player twice, then balance courts and A/B side as much as possible.";
-        } else if (state.courts === 3 && players === 13) {
-          els.modeNote.textContent = "Exact schedule: partner each player once, oppose each player twice, and each player sits exactly once.";
-        } else {
-          els.modeNote.textContent = "";
-        }
-      }
-
-      function setStatus(message, type) {
-        els.status.textContent = message || "";
-        els.status.className = "status" + (type ? ` ${type}` : "");
-      }
-
-      function shuffle(arr) {
-        const a = arr.slice();
-        for (let i = a.length - 1; i > 0; i -= 1) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [a[i], a[j]] = [a[j], a[i]];
-        }
-        return a;
-      }
-
-      function permutations(arr) {
-        if (arr.length <= 1) return [arr.slice()];
-        const out = [];
-        for (let i = 0; i < arr.length; i += 1) {
-          const first = arr[i];
-          const rest = arr.slice(0, i).concat(arr.slice(i + 1));
-          permutations(rest).forEach((tail) => out.push([first, ...tail]));
-        }
-        return out;
-      }
-
-      function getModeValue() {
-        const selected = els.modeRadios.find(r => r.checked);
-        return selected ? parseInt(selected.value, 10) : 2;
-      }
-
-      function getInputNames() {
-        const count = currentPlayerCount();
-        const inputs = Array.from(els.playerInputs.querySelectorAll("input"));
-        if (!inputs.length) return state.names.slice(0, count);
-        return inputs.map((input, i) => input.value || `Player ${i + 1}`);
-      }
-
-      function populatePlayerCountSelect() {
-        const allowed = MODE_OPTIONS[state.courts];
-        els.playerCountSelect.innerHTML = "";
-
-        allowed.forEach((count) => {
-          const option = document.createElement("option");
-          option.value = String(count);
-          option.textContent = count % 2 === 0
-            ? `${count} Players`
-            : `${count} Players (1 sits each round)`;
-          els.playerCountSelect.appendChild(option);
-        });
-
-        if (!allowed.includes(state.playerCount)) {
-          state.playerCount = allowed[0];
-        }
-
-        els.playerCountSelect.value = String(state.playerCount);
-      }
-
-      function switchMode(newCourts, fromRestore) {
-        state.namesByCount[currentPlayerCount()] = getInputNames();
-        state.courts = newCourts;
-        populatePlayerCountSelect();
-
-        const count = currentPlayerCount();
-        state.names = (state.namesByCount[count] && state.namesByCount[count].length === count)
-          ? state.namesByCount[count].slice()
-          : Array.from({ length: count }, (_, i) => `Player ${i + 1}`);
-
-        state.schedule = [];
-        state.byes = {};
-        state.scores = {};
-
-        updateSummary();
-        initInputs();
-        renderSchedule();
-        renderRankings();
-
-        if (!fromRestore) {
-          persist();
-          setStatus("", "");
-        }
-      }
-
-      function switchPlayerCount(newCount, fromRestore) {
-        state.namesByCount[currentPlayerCount()] = getInputNames();
-        state.playerCount = newCount;
-
-        const count = currentPlayerCount();
-        state.names = (state.namesByCount[count] && state.namesByCount[count].length === count)
-          ? state.namesByCount[count].slice()
-          : Array.from({ length: count }, (_, i) => `Player ${i + 1}`);
-
-        state.schedule = [];
-        state.byes = {};
-        state.scores = {};
-
-        updateSummary();
-        initInputs();
-        renderSchedule();
-        renderRankings();
-
-        if (!fromRestore) {
-          persist();
-          setStatus("", "");
-        }
-      }
-
-      function initInputs() {
-        const count = currentPlayerCount();
-        els.playerInputs.innerHTML = "";
-        els.playerInputs.className = `players-grid ${count <= 9 ? "cols-4" : "cols-3"}`;
-
-        for (let i = 0; i < count; i += 1) {
-          const input = document.createElement("input");
-          input.type = "text";
-          input.placeholder = `Player ${i + 1}`;
-          input.value = state.names[i] || "";
-          input.addEventListener("input", (e) => {
-            state.names[i] = e.target.value;
-            state.namesByCount[count] = state.names.slice();
-            persist();
-            renderRankings();
-            rerenderScheduleNamesOnly();
-          });
-          els.playerInputs.appendChild(input);
-        }
-      }
-
-      function normalizeNames() {
-        const count = currentPlayerCount();
-        const raw = getInputNames();
-        const trimmed = raw.map((n, i) => {
-          const val = (n || "").trim();
-          return val || `Player ${i + 1}`;
-        });
-
-        const uniq = new Set(trimmed.map((n) => n.toLowerCase()));
-        if (uniq.size !== count) {
-          setStatus("Player names must be unique (case-insensitive).", "err");
-          return null;
-        }
-
-        state.names = trimmed;
-        state.namesByCount[count] = trimmed.slice();
-        return trimmed;
-      }
-
-      function teamLabel(ids) {
-        return `${state.names[ids[0]]} & ${state.names[ids[1]]}`;
-      }
-
-      function clone2D(matrix) {
-        return matrix.map(row => row.slice());
-      }
-
-      function enumerateMatchings(items) {
-        if (items.length === 0) return [[]];
-        const first = items[0];
-        const results = [];
-        for (let i = 1; i < items.length; i += 1) {
-          const remaining = [];
-          for (let j = 1; j < items.length; j += 1) {
-            if (j !== i) remaining.push(items[j]);
-          }
-          const tails = enumerateMatchings(remaining);
-          tails.forEach((tail) => {
-            results.push([[first, items[i]], ...tail]);
-          });
-        }
-        return results;
-      }
-
-      function parseTemplate(playerCount, playerMapping, roundOffset) {
-        const template = TEMPLATE_SPECS[playerCount];
-        const rounds = [];
-        const byes = {};
-
-        for (let r = 0; r < template.rounds.length; r += 1) {
-          const sourceIndex = (r + roundOffset) % template.rounds.length;
-          const line = template.rounds[sourceIndex];
-          const pieces = line.split("|").map(s => s.trim());
-          const roundMatches = [];
-          let bye = null;
-
-          pieces.forEach((piece) => {
-            if (piece.startsWith("bye:")) {
-              const letter = piece.slice(4).trim();
-              const idx = LETTERS.indexOf(letter);
-              if (idx >= 0) bye = playerMapping[idx];
-              return;
-            }
-
-            const [left, right] = piece.split(":").map(s => s.trim());
-            const teamA = left.split("+").map(letter => playerMapping[LETTERS.indexOf(letter)]);
-            const teamB = right.split("+").map(letter => playerMapping[LETTERS.indexOf(letter)]);
-            roundMatches.push({
-              teamA,
-              teamB
-            });
-          });
-
-          rounds.push(roundMatches);
-          if (bye != null) byes[r + 1] = bye;
-        }
-
-        return { rounds, byes };
-      }
-
-      function buildRoundOptions(roundMatches, courts) {
-        const courtIndexes = Array.from({ length: courts }, (_, i) => i);
-        const matchIndexes = Array.from({ length: roundMatches.length }, (_, i) => i);
-        const courtPerms = permutations(courtIndexes);
-
-        const options = [];
-        const seen = new Set();
-
-        for (let cp = 0; cp < courtPerms.length; cp += 1) {
-          const courtOrder = courtPerms[cp];
-
-          for (let mask = 0; mask < (1 << courts); mask += 1) {
-            const assignments = [];
-            for (let i = 0; i < courts; i += 1) {
-              let match = roundMatches[matchIndexes[i]];
-              let teamA = match.teamA.slice();
-              let teamB = match.teamB.slice();
-
-              if ((mask >> i) & 1) {
-                const temp = teamA;
-                teamA = teamB;
-                teamB = temp;
-              }
-
-              assignments.push({
-                court: courtOrder[i],
-                teamA,
-                teamB
-              });
-            }
-
-            assignments.sort((a, b) => a.court - b.court);
-            const key = JSON.stringify(assignments);
-            if (!seen.has(key)) {
-              seen.add(key);
-              options.push(assignments);
-            }
-          }
-        }
-
-        return options;
-      }
-
-      function createEmptyBalanceState(playerCount, courts) {
-        return {
-          courtCounts: Array.from({ length: playerCount }, () => Array(courts).fill(0)),
-          sideA: Array(playerCount).fill(0),
-          sideB: Array(playerCount).fill(0),
-          lastCourt: Array(playerCount).fill(-1),
-          lastSide: Array(playerCount).fill(""),
-          courtStreak: Array(playerCount).fill(0),
-          sideStreak: Array(playerCount).fill(0),
-          schedule: [],
-          runningPenalty: 0
-        };
-      }
-
-      function scoreIncrementForRound(assignments, balanceState, playerCount, courts) {
-        const roundsPlayed = roundsPlayedPerPerson(playerCount);
-        const targetCourt = roundsPlayed / courts;
-        const targetSide = roundsPlayed / 2;
-
-        let score = 0;
-
-        assignments.forEach((assignment) => {
-          const court = assignment.court;
-          const playersA = assignment.teamA;
-          const playersB = assignment.teamB;
-
-          playersA.forEach((p) => {
-            const beforeCourt = balanceState.courtCounts[p][court];
-            const afterCourt = beforeCourt + 1;
-            score += (Math.abs(afterCourt - targetCourt) - Math.abs(beforeCourt - targetCourt)) * 24;
-
-            const beforeSide = balanceState.sideA[p];
-            const afterSide = beforeSide + 1;
-            score += (Math.abs(afterSide - targetSide) - Math.abs(beforeSide - targetSide)) * 15;
-
-            if (balanceState.lastCourt[p] === court) {
-              score += 22 + (balanceState.courtStreak[p] * 8);
-            }
-
-            if (balanceState.lastSide[p] === "A") {
-              score += 15 + (balanceState.sideStreak[p] * 7);
-            }
-          });
-
-          playersB.forEach((p) => {
-            const beforeCourt = balanceState.courtCounts[p][court];
-            const afterCourt = beforeCourt + 1;
-            score += (Math.abs(afterCourt - targetCourt) - Math.abs(beforeCourt - targetCourt)) * 24;
-
-            const beforeSide = balanceState.sideB[p];
-            const afterSide = beforeSide + 1;
-            score += (Math.abs(afterSide - targetSide) - Math.abs(beforeSide - targetSide)) * 15;
-
-            if (balanceState.lastCourt[p] === court) {
-              score += 22 + (balanceState.courtStreak[p] * 8);
-            }
-
-            if (balanceState.lastSide[p] === "B") {
-              score += 15 + (balanceState.sideStreak[p] * 7);
-            }
-          });
-        });
-
-        return score;
-      }
-
-      function applyRoundToBalanceState(assignments, balanceState) {
-        const next = {
-          courtCounts: clone2D(balanceState.courtCounts),
-          sideA: balanceState.sideA.slice(),
-          sideB: balanceState.sideB.slice(),
-          lastCourt: balanceState.lastCourt.slice(),
-          lastSide: balanceState.lastSide.slice(),
-          courtStreak: balanceState.courtStreak.slice(),
-          sideStreak: balanceState.sideStreak.slice(),
-          schedule: balanceState.schedule.slice(),
-          runningPenalty: balanceState.runningPenalty
-        };
-
-        assignments.forEach((assignment) => {
-          const court = assignment.court;
-          const playersA = assignment.teamA;
-          const playersB = assignment.teamB;
-
-          playersA.forEach((p) => {
-            next.courtCounts[p][court] += 1;
-            next.sideA[p] += 1;
-
-            if (next.lastCourt[p] === court) {
-              next.courtStreak[p] += 1;
-            } else {
-              next.courtStreak[p] = 0;
-            }
-
-            if (next.lastSide[p] === "A") {
-              next.sideStreak[p] += 1;
-            } else {
-              next.sideStreak[p] = 0;
-            }
-
-            next.lastCourt[p] = court;
-            next.lastSide[p] = "A";
-          });
-
-          playersB.forEach((p) => {
-            next.courtCounts[p][court] += 1;
-            next.sideB[p] += 1;
-
-            if (next.lastCourt[p] === court) {
-              next.courtStreak[p] += 1;
-            } else {
-              next.courtStreak[p] = 0;
-            }
-
-            if (next.lastSide[p] === "B") {
-              next.sideStreak[p] += 1;
-            } else {
-              next.sideStreak[p] = 0;
-            }
-
-            next.lastCourt[p] = court;
-            next.lastSide[p] = "B";
-          });
-        });
-
-        return next;
-      }
-
-      function finalBalanceScore(balanceState, playerCount, courts) {
-        const roundsPlayed = roundsPlayedPerPerson(playerCount);
-        const targetCourt = roundsPlayed / courts;
-        const targetSide = roundsPlayed / 2;
-        let score = balanceState.runningPenalty;
-
-        for (let p = 0; p < playerCount; p += 1) {
-          for (let c = 0; c < courts; c += 1) {
-            score += Math.pow(balanceState.courtCounts[p][c] - targetCourt, 2) * 80;
-          }
-
-          score += Math.pow(balanceState.sideA[p] - targetSide, 2) * 55;
-          score += Math.pow(balanceState.sideB[p] - targetSide, 2) * 55;
-          score += Math.pow(balanceState.sideA[p] - balanceState.sideB[p], 2) * 40;
-        }
-
-        return score;
-      }
-
-      function optimizeCourtAndSide(parsedRounds, playerCount, courts) {
-        const beamWidth = playerCount <= 9 ? 220 : 320;
-        let beam = [createEmptyBalanceState(playerCount, courts)];
-
-        for (let r = 0; r < parsedRounds.length; r += 1) {
-          const roundMatches = parsedRounds[r];
-          const options = buildRoundOptions(roundMatches, courts);
-          const nextBeam = [];
-
-          for (let b = 0; b < beam.length; b += 1) {
-            const stateNode = beam[b];
-
-            for (let o = 0; o < options.length; o += 1) {
-              const assignments = options[o];
-              const increment = scoreIncrementForRound(assignments, stateNode, playerCount, courts);
-              const next = applyRoundToBalanceState(assignments, stateNode);
-              next.runningPenalty += increment;
-              next.schedule.push(assignments);
-              nextBeam.push(next);
-            }
-          }
-
-          nextBeam.sort((a, b) => {
-            const scoreA = finalBalanceScore(a, playerCount, courts);
-            const scoreB = finalBalanceScore(b, playerCount, courts);
-            return scoreA - scoreB;
-          });
-
-          beam = nextBeam.slice(0, beamWidth);
-        }
-
-        beam.sort((a, b) => {
-          const scoreA = finalBalanceScore(a, playerCount, courts);
-          const scoreB = finalBalanceScore(b, playerCount, courts);
-          return scoreA - scoreB;
-        });
-
-        return beam[0];
-      }
-
-      function computePairStats(schedule, playerCount) {
-        const partner = Array.from({ length: playerCount }, () => Array(playerCount).fill(0));
-        const opp = Array.from({ length: playerCount }, () => Array(playerCount).fill(0));
-
-        schedule.forEach((m) => {
-          const a = m.teamA;
-          const b = m.teamB;
-
-          partner[a[0]][a[1]] += 1;
-          partner[a[1]][a[0]] += 1;
-          partner[b[0]][b[1]] += 1;
-          partner[b[1]][b[0]] += 1;
-
-          for (let i = 0; i < a.length; i += 1) {
-            for (let j = 0; j < b.length; j += 1) {
-              const p = a[i];
-              const q = b[j];
-              opp[p][q] += 1;
-              opp[q][p] += 1;
-            }
-          }
-        });
-
-        return { partner, opp };
-      }
-
-      function validateExactSchedule(schedule, byes, playerCount) {
-        const stats = computePairStats(schedule, playerCount);
-
-        for (let i = 0; i < playerCount; i += 1) {
-          for (let j = i + 1; j < playerCount; j += 1) {
-            if (stats.partner[i][j] !== 1) return false;
-            if (stats.opp[i][j] !== 2) return false;
-          }
-        }
-
-        if (playerCount % 2 === 1) {
-          const byeCounts = Array(playerCount).fill(0);
-          Object.values(byes).forEach((p) => {
-            if (Number.isInteger(p)) byeCounts[p] += 1;
-          });
-          for (let i = 0; i < playerCount; i += 1) {
-            if (byeCounts[i] !== 1) return false;
-          }
-        }
-
-        return true;
-      }
-
-      function flattenOptimizedSchedule(optimizedRounds) {
-        const flat = [];
-        let matchId = 1;
-
-        for (let r = 0; r < optimizedRounds.length; r += 1) {
-          const roundAssignments = optimizedRounds[r];
-          for (let m = 0; m < roundAssignments.length; m += 1) {
-            const item = roundAssignments[m];
-            flat.push({
-              id: `m${matchId++}`,
-              round: r + 1,
-              court: item.court + 1,
-              teamA: item.teamA.slice(),
-              teamB: item.teamB.slice()
-            });
-          }
-        }
-
-        return flat;
-      }
-
-      function buildBestExactSchedule(playerCount, courts, randomizeNames) {
-        const tries = randomizeNames ? 28 : 3;
-        const template = TEMPLATE_SPECS[playerCount];
-        let best = null;
-        let bestScore = Infinity;
-
-        for (let t = 0; t < tries; t += 1) {
-          const basePlayers = Array.from({ length: playerCount }, (_, i) => i);
-          const playerMapping = randomizeNames ? shuffle(basePlayers) : basePlayers.slice();
-
-          const roundOffset = randomizeNames
-            ? Math.floor(Math.random() * template.rounds.length)
-            : 0;
-
-          const parsed = parseTemplate(playerCount, playerMapping, roundOffset);
-          const optimized = optimizeCourtAndSide(parsed.rounds, playerCount, courts);
-          const schedule = flattenOptimizedSchedule(optimized.schedule);
-          const finalScore = finalBalanceScore(optimized, playerCount, courts);
-
-          if (!validateExactSchedule(schedule, parsed.byes, playerCount)) {
-            continue;
-          }
-
-          if (finalScore < bestScore) {
-            bestScore = finalScore;
-            best = {
-              schedule,
-              byes: parsed.byes,
-              score: finalScore
-            };
-          }
-        }
-
-        return best;
-      }
-
-      function buildSchedule() {
-        const names = normalizeNames();
-        if (!names) return;
-
-        setStatus("Generating exact balanced schedule…", "");
-        els.generateBtn.disabled = true;
-        els.generateBtn.textContent = "Generating...";
-
-        setTimeout(() => {
-          const players = currentPlayerCount();
-          const courts = state.courts;
-          const result = buildBestExactSchedule(players, courts, els.randomizeNames.checked);
-
-          els.generateBtn.disabled = false;
-          els.generateBtn.textContent = "Generate Schedule";
-
-          if (!result || !result.schedule || !result.schedule.length) {
-            setStatus("Could not generate a schedule. Please try again.", "err");
-            return;
-          }
-
-          state.schedule = result.schedule;
-          state.byes = result.byes || {};
-          state.scores = {};
-
-          persist();
-          renderSchedule();
-          renderRankings();
-
-          if (players % 2 === 1) {
-            setStatus("Exact schedule generated: partner-once, oppose-twice, and each player sits once. Courts and A/B side were balanced as much as possible.", "ok");
-          } else {
-            setStatus("Exact schedule generated: partner-once and oppose-twice. Courts and A/B side were balanced as much as possible.", "ok");
-          }
-        }, 25);
-      }
-
-      function createScoreSelect(matchId, side, value) {
-        const select = document.createElement("select");
-        select.className = "score-select";
-        select.dataset.matchId = matchId;
-        select.dataset.side = side;
-
-        const blank = document.createElement("option");
-        blank.value = "";
-        blank.textContent = "—";
-        select.appendChild(blank);
-
-        for (let i = 0; i <= 15; i += 1) {
-          const option = document.createElement("option");
-          option.value = String(i);
-          option.textContent = String(i);
-          select.appendChild(option);
-        }
-
-        select.value = Number.isFinite(value) ? String(value) : "";
-        select.addEventListener("change", onScoreChange);
-        return select;
-      }
-
-      function onScoreChange(e) {
-        const matchId = e.target.dataset.matchId;
-        const side = e.target.dataset.side;
-        const raw = e.target.value;
-
-        if (!state.scores[matchId]) state.scores[matchId] = { a: null, b: null };
-
-        if (raw === "") {
-          state.scores[matchId][side] = null;
-        } else {
-          const parsed = parseInt(raw, 10);
-          state.scores[matchId][side] = Number.isFinite(parsed) ? parsed : null;
-        }
-
-        if (state.scores[matchId].a == null && state.scores[matchId].b == null) {
-          delete state.scores[matchId];
-        }
-
+    <script>
+(function () {
+  const STORAGE_KEY = "pickleball_mixer_hardcoded_v1";
+
+  const MODE_OPTIONS = {
+    2: [8, 9],
+    3: [12, 13]
+  };
+
+  // Two fixed styles for each size.
+  // Style 2 is the same exact tournament with rounds reordered
+  // and court assignment mirrored, so the partner/opponent guarantees remain exact.
+  const TEMPLATE_STYLES = {
+    8: [
+      [
+        "H+G:F+C | B+A:D+E",
+        "G+D:H+E | C+B:F+A",
+        "H+C:E+B | D+A:G+F",
+        "E+G:B+F | A+C:D+H",
+        "A+E:C+G | F+H:B+D",
+        "C+D:G+B | E+F:H+A",
+        "D+F:E+C | B+H:A+G"
+      ],
+      [
+        "E+G:B+F | A+C:D+H",
+        "A+E:C+G | F+H:B+D",
+        "C+D:G+B | E+F:H+A",
+        "D+F:E+C | B+H:A+G",
+        "H+G:F+C | B+A:D+E",
+        "G+D:H+E | C+B:F+A",
+        "H+C:E+B | D+A:G+F"
+      ]
+    ],
+    9: [
+      [
+        "bye:A | B+C:D+G | E+I:F+H",
+        "bye:B | C+A:E+H | F+G:D+I",
+        "bye:C | A+B:F+I | D+H:E+G",
+        "bye:D | E+F:G+A | H+C:I+B",
+        "bye:E | F+D:H+B | I+A:G+C",
+        "bye:F | D+E:I+C | G+B:H+A",
+        "bye:G | H+I:A+D | B+F:C+E",
+        "bye:H | I+G:B+E | C+D:A+F",
+        "bye:I | G+H:C+F | A+E:B+D"
+      ],
+      [
+        "bye:D | E+F:G+A | H+C:I+B",
+        "bye:E | F+D:H+B | I+A:G+C",
+        "bye:F | D+E:I+C | G+B:H+A",
+        "bye:G | H+I:A+D | B+F:C+E",
+        "bye:H | I+G:B+E | C+D:A+F",
+        "bye:I | G+H:C+F | A+E:B+D",
+        "bye:A | B+C:D+G | E+I:F+H",
+        "bye:B | C+A:E+H | F+G:D+I",
+        "bye:C | A+B:F+I | D+H:E+G"
+      ]
+    ],
+    12: [
+      [
+        "E+G:I+J | L+A:B+H | C+F:D+K",
+        "L+D:E+K | F+I:G+C | H+J:A+B",
+        "I+A:J+F | K+B:D+E | L+G:H+C",
+        "C+E:G+H | L+J:K+F | A+D:B+I",
+        "L+B:C+I | D+G:E+A | F+H:J+K",
+        "G+J:H+D | I+K:B+C | L+E:F+A",
+        "A+C:E+F | L+H:I+D | J+B:K+G",
+        "L+K:A+G | B+E:C+J | D+F:H+I",
+        "E+H:F+B | G+I:K+A | L+C:D+J",
+        "J+A:C+D | L+F:G+B | H+K:I+E",
+        "L+I:J+E | K+C:A+H | B+D:F+G"
+      ],
+      [
+        "G+J:H+D | I+K:B+C | L+E:F+A",
+        "A+C:E+F | L+H:I+D | J+B:K+G",
+        "L+K:A+G | B+E:C+J | D+F:H+I",
+        "E+H:F+B | G+I:K+A | L+C:D+J",
+        "J+A:C+D | L+F:G+B | H+K:I+E",
+        "L+I:J+E | K+C:A+H | B+D:F+G",
+        "E+G:I+J | L+A:B+H | C+F:D+K",
+        "L+D:E+K | F+I:G+C | H+J:A+B",
+        "I+A:J+F | K+B:D+E | L+G:H+C",
+        "C+E:G+H | L+J:K+F | A+D:B+I",
+        "L+B:C+I | D+G:E+A | F+H:J+K"
+      ]
+    ],
+    13: [
+      [
+        "bye:A | E+M:K+H | B+I:D+L | F+J:G+C",
+        "bye:E | B+A:G+J | D+M:F+I | K+L:C+H",
+        "bye:B | D+E:C+L | F+A:K+M | G+I:H+J",
+        "bye:D | F+B:H+I | K+E:G+A | C+M:J+L",
+        "bye:F | K+D:J+M | G+B:C+E | H+A:L+I",
+        "bye:K | G+F:L+A | C+D:H+B | J+E:I+M",
+        "bye:G | C+K:I+E | H+F:J+D | L+B:M+A",
+        "bye:C | H+G:M+B | J+K:L+F | I+D:A+E",
+        "bye:H | J+C:A+D | L+G:I+K | M+F:E+B",
+        "bye:J | L+H:E+F | I+C:M+G | A+K:B+D",
+        "bye:L | I+J:B+K | M+H:A+C | E+G:D+F",
+        "bye:I | M+L:D+G | A+J:E+H | B+C:F+K",
+        "bye:M | A+I:F+C | E+L:B+J | D+H:K+G"
+      ],
+      [
+        "bye:G | C+K:I+E | H+F:J+D | L+B:M+A",
+        "bye:C | H+G:M+B | J+K:L+F | I+D:A+E",
+        "bye:H | J+C:A+D | L+G:I+K | M+F:E+B",
+        "bye:J | L+H:E+F | I+C:M+G | A+K:B+D",
+        "bye:L | I+J:B+K | M+H:A+C | E+G:D+F",
+        "bye:I | M+L:D+G | A+J:E+H | B+C:F+K",
+        "bye:M | A+I:F+C | E+L:B+J | D+H:K+G",
+        "bye:A | E+M:K+H | B+I:D+L | F+J:G+C",
+        "bye:E | B+A:G+J | D+M:F+I | K+L:C+H",
+        "bye:B | D+E:C+L | F+A:K+M | G+I:H+J",
+        "bye:D | F+B:H+I | K+E:G+A | C+M:J+L",
+        "bye:F | K+D:J+M | G+B:C+E | H+A:L+I",
+        "bye:K | G+F:L+A | C+D:H+B | J+E:I+M"
+      ]
+    ]
+  };
+
+  const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+  const els = {
+    playerInputs: document.getElementById("playerInputs"),
+    modeNote: document.getElementById("modeNote"),
+    randomizeNames: document.getElementById("randomizeNames"),
+    generateBtn: document.getElementById("generateBtn"),
+    clearScoresBtn: document.getElementById("clearScoresBtn"),
+    resetAllBtn: document.getElementById("resetAllBtn"),
+    schedule: document.getElementById("schedule"),
+    winsTable: document.getElementById("winsTable"),
+    pointsTable: document.getElementById("pointsTable"),
+    status: document.getElementById("status"),
+    summaryCourts: document.getElementById("summaryCourts"),
+    summaryPlayers: document.getElementById("summaryPlayers"),
+    summaryRounds: document.getElementById("summaryRounds"),
+    summaryMatches: document.getElementById("summaryMatches"),
+    scheduleTitle: document.getElementById("scheduleTitle"),
+    modeRadios: Array.from(document.querySelectorAll('input[name="courtMode"]')),
+    playerCountSelect: document.getElementById("playerCountSelect")
+  };
+
+  const state = {
+    courts: 2,
+    playerCount: 8,
+    namesByCount: {
+      8: Array.from({ length: 8 }, (_, i) => `Player ${i + 1}`),
+      9: Array.from({ length: 9 }, (_, i) => `Player ${i + 1}`),
+      12: Array.from({ length: 12 }, (_, i) => `Player ${i + 1}`),
+      13: Array.from({ length: 13 }, (_, i) => `Player ${i + 1}`)
+    },
+    names: Array.from({ length: 8 }, (_, i) => `Player ${i + 1}`),
+    schedule: [],
+    byes: {},
+    scores: {},
+    scheduleStyle: 0
+  };
+
+  function currentPlayerCount() {
+    return state.playerCount;
+  }
+
+  function currentRounds() {
+    return TEMPLATE_STYLES[currentPlayerCount()][0].length;
+  }
+
+  function currentMatchCount() {
+    return currentRounds() * state.courts;
+  }
+
+  function updateSummary() {
+    const players = currentPlayerCount();
+    const rounds = currentRounds();
+
+    els.summaryCourts.textContent = String(state.courts);
+    els.summaryPlayers.textContent = String(players);
+    els.summaryRounds.textContent = String(rounds);
+    els.summaryMatches.textContent = String(currentMatchCount());
+    els.scheduleTitle.textContent = `Schedule (${state.courts} Courts × ${rounds} Rounds)`;
+
+    if (players % 2 === 1) {
+      els.modeNote.textContent = "Hard-coded exact schedule: each player partners every other player once, opposes every other player exactly twice, and sits exactly once.";
+    } else {
+      els.modeNote.textContent = "Hard-coded exact schedule: each player partners every other player once and opposes every other player exactly twice.";
+    }
+  }
+
+  function setStatus(message, type) {
+    els.status.textContent = message || "";
+    els.status.className = "status" + (type ? ` ${type}` : "");
+  }
+
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function getModeValue() {
+    const selected = els.modeRadios.find(r => r.checked);
+    return selected ? parseInt(selected.value, 10) : 2;
+  }
+
+  function getInputNames() {
+    const count = currentPlayerCount();
+    const inputs = Array.from(els.playerInputs.querySelectorAll("input"));
+    if (!inputs.length) return state.names.slice(0, count);
+    return inputs.map((input, i) => input.value || `Player ${i + 1}`);
+  }
+
+  function populatePlayerCountSelect() {
+    const allowed = MODE_OPTIONS[state.courts];
+    els.playerCountSelect.innerHTML = "";
+
+    allowed.forEach((count) => {
+      const option = document.createElement("option");
+      option.value = String(count);
+      option.textContent = count % 2 === 0
+        ? `${count} Players`
+        : `${count} Players (1 sits each round)`;
+      els.playerCountSelect.appendChild(option);
+    });
+
+    if (!allowed.includes(state.playerCount)) {
+      state.playerCount = allowed[0];
+    }
+
+    els.playerCountSelect.value = String(state.playerCount);
+  }
+
+  function switchMode(newCourts, fromRestore) {
+    state.namesByCount[currentPlayerCount()] = getInputNames();
+    state.courts = newCourts;
+    populatePlayerCountSelect();
+
+    const count = currentPlayerCount();
+    state.names = (state.namesByCount[count] && state.namesByCount[count].length === count)
+      ? state.namesByCount[count].slice()
+      : Array.from({ length: count }, (_, i) => `Player ${i + 1}`);
+
+    state.schedule = [];
+    state.byes = {};
+    state.scores = {};
+
+    updateSummary();
+    initInputs();
+    renderSchedule();
+    renderRankings();
+
+    if (!fromRestore) {
+      persist();
+      setStatus("", "");
+    }
+  }
+
+  function switchPlayerCount(newCount, fromRestore) {
+    state.namesByCount[currentPlayerCount()] = getInputNames();
+    state.playerCount = newCount;
+
+    const count = currentPlayerCount();
+    state.names = (state.namesByCount[count] && state.namesByCount[count].length === count)
+      ? state.namesByCount[count].slice()
+      : Array.from({ length: count }, (_, i) => `Player ${i + 1}`);
+
+    state.schedule = [];
+    state.byes = {};
+    state.scores = {};
+
+    updateSummary();
+    initInputs();
+    renderSchedule();
+    renderRankings();
+
+    if (!fromRestore) {
+      persist();
+      setStatus("", "");
+    }
+  }
+
+  function initInputs() {
+    const count = currentPlayerCount();
+    els.playerInputs.innerHTML = "";
+    els.playerInputs.className = `players-grid ${count <= 9 ? "cols-4" : "cols-3"}`;
+
+    for (let i = 0; i < count; i += 1) {
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = `Player ${i + 1}`;
+      input.value = state.names[i] || "";
+      input.addEventListener("input", (e) => {
+        state.names[i] = e.target.value;
+        state.namesByCount[count] = state.names.slice();
         persist();
         renderRankings();
+        rerenderScheduleNamesOnly();
+      });
+      els.playerInputs.appendChild(input);
+    }
+  }
+
+  function normalizeNames() {
+    const count = currentPlayerCount();
+    const raw = getInputNames();
+    const trimmed = raw.map((n, i) => {
+      const val = (n || "").trim();
+      return val || `Player ${i + 1}`;
+    });
+
+    const uniq = new Set(trimmed.map((n) => n.toLowerCase()));
+    if (uniq.size !== count) {
+      setStatus("Player names must be unique (case-insensitive).", "err");
+      return null;
+    }
+
+    state.names = trimmed;
+    state.namesByCount[count] = trimmed.slice();
+    return trimmed;
+  }
+
+  function teamLabel(ids) {
+    return `${state.names[ids[0]]} & ${state.names[ids[1]]}`;
+  }
+
+  function parseTemplateLine(line, playerMapping) {
+    const pieces = line.split("|").map(s => s.trim());
+    let bye = null;
+    const matches = [];
+
+    pieces.forEach((piece) => {
+      if (piece.startsWith("bye:")) {
+        const letter = piece.slice(4).trim();
+        bye = playerMapping[LETTERS.indexOf(letter)];
+        return;
       }
 
-      function renderSchedule() {
-        els.schedule.innerHTML = "";
+      const [left, right] = piece.split(":").map(s => s.trim());
+      const teamA = left.split("+").map(letter => playerMapping[LETTERS.indexOf(letter)]);
+      const teamB = right.split("+").map(letter => playerMapping[LETTERS.indexOf(letter)]);
+      matches.push({ teamA, teamB });
+    });
 
-        if (!state.schedule.length) {
-          const empty = document.createElement("p");
-          empty.className = "sub";
-          empty.textContent = "No schedule yet. Choose courts and players, enter names, and click Generate Schedule.";
-          els.schedule.appendChild(empty);
-          return;
-        }
+    return { bye, matches };
+  }
 
-        const rounds = {};
-        state.schedule.forEach((match) => {
-          if (!rounds[match.round]) rounds[match.round] = [];
-          rounds[match.round].push(match);
+  function buildHardcodedSchedule(playerCount, courts, randomizeNames) {
+    const styles = TEMPLATE_STYLES[playerCount];
+    const styleIndex = state.scheduleStyle % 2;
+    const template = styles[styleIndex];
+
+    const basePlayers = Array.from({ length: playerCount }, (_, i) => i);
+    const playerMapping = randomizeNames ? shuffle(basePlayers) : basePlayers.slice();
+
+    const schedule = [];
+    const byes = {};
+    let matchId = 1;
+
+    for (let r = 0; r < template.length; r += 1) {
+      const { bye, matches } = parseTemplateLine(template[r], playerMapping);
+
+      if (bye != null) byes[r + 1] = bye;
+
+      const style2 = styleIndex === 1;
+      const orderedMatches = style2 ? matches.slice().reverse() : matches.slice();
+
+      orderedMatches.forEach((m, idx) => {
+        const flipSides = style2 ? (idx % 2 === 0) : false;
+        const teamA = flipSides ? m.teamB.slice() : m.teamA.slice();
+        const teamB = flipSides ? m.teamA.slice() : m.teamB.slice();
+
+        schedule.push({
+          id: `m${matchId++}`,
+          round: r + 1,
+          court: idx + 1,
+          teamA,
+          teamB
+        });
+      });
+    }
+
+    return { schedule, byes };
+  }
+
+  function buildSchedule() {
+    const names = normalizeNames();
+    if (!names) return;
+
+    state.scheduleStyle = (state.scheduleStyle + 1) % 2;
+
+    const players = currentPlayerCount();
+    const courts = state.courts;
+    const result = buildHardcodedSchedule(players, courts, els.randomizeNames.checked);
+
+    state.schedule = result.schedule;
+    state.byes = result.byes || {};
+    state.scores = {};
+
+    persist();
+    renderSchedule();
+    renderRankings();
+
+    setStatus(`Exact hard-coded schedule generated (Style ${state.scheduleStyle + 1} of 2).`, "ok");
+  }
+
+  function createScoreSelect(matchId, side, value) {
+    const select = document.createElement("select");
+    select.className = "score-select";
+    select.dataset.matchId = matchId;
+    select.dataset.side = side;
+
+    const blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = "—";
+    select.appendChild(blank);
+
+    for (let i = 0; i <= 15; i += 1) {
+      const option = document.createElement("option");
+      option.value = String(i);
+      option.textContent = String(i);
+      select.appendChild(option);
+    }
+
+    select.value = Number.isFinite(value) ? String(value) : "";
+    select.addEventListener("change", onScoreChange);
+    return select;
+  }
+
+  function onScoreChange(e) {
+    const matchId = e.target.dataset.matchId;
+    const side = e.target.dataset.side;
+    const raw = e.target.value;
+
+    if (!state.scores[matchId]) state.scores[matchId] = { a: null, b: null };
+
+    if (raw === "") {
+      state.scores[matchId][side] = null;
+    } else {
+      const parsed = parseInt(raw, 10);
+      state.scores[matchId][side] = Number.isFinite(parsed) ? parsed : null;
+    }
+
+    if (state.scores[matchId].a == null && state.scores[matchId].b == null) {
+      delete state.scores[matchId];
+    }
+
+    persist();
+    renderRankings();
+  }
+
+  function renderSchedule() {
+    els.schedule.innerHTML = "";
+
+    if (!state.schedule.length) {
+      const empty = document.createElement("p");
+      empty.className = "sub";
+      empty.textContent = "No schedule yet. Choose courts and players, enter names, and click Generate Schedule.";
+      els.schedule.appendChild(empty);
+      return;
+    }
+
+    const rounds = {};
+    state.schedule.forEach((match) => {
+      if (!rounds[match.round]) rounds[match.round] = [];
+      rounds[match.round].push(match);
+    });
+
+    Object.keys(rounds).sort((a, b) => Number(a) - Number(b)).forEach((roundKey) => {
+      const block = document.createElement("section");
+      block.className = "round-block";
+
+      const title = document.createElement("div");
+      title.className = "round-title";
+      title.textContent = `Round ${roundKey}`;
+
+      const grid = document.createElement("div");
+      grid.className = "matches-grid";
+
+      if (state.byes && state.byes[roundKey] != null) {
+        const byeNote = document.createElement("div");
+        byeNote.className = "tiny";
+        byeNote.style.marginBottom = "8px";
+        byeNote.innerHTML = `<strong>Sitting out:</strong> ${state.names[state.byes[roundKey]]}`;
+        block.appendChild(title);
+        block.appendChild(byeNote);
+      } else {
+        block.appendChild(title);
+      }
+
+      rounds[roundKey]
+        .sort((a, b) => a.court - b.court)
+        .forEach((match) => {
+          const card = document.createElement("article");
+          card.className = "match";
+
+          const head = document.createElement("div");
+          head.className = "match-head";
+          head.innerHTML = `<strong>Court ${match.court}</strong><span>Side A vs Side B</span>`;
+
+          const teams = document.createElement("div");
+          teams.className = "teams";
+          teams.innerHTML = `<div>${teamLabel(match.teamA)}</div><div class="vs">vs</div><div>${teamLabel(match.teamB)}</div>`;
+
+          const scores = document.createElement("div");
+          scores.className = "scores";
+
+          const saved = state.scores[match.id] || { a: null, b: null };
+          scores.appendChild(createScoreSelect(match.id, "a", saved.a));
+
+          const dash = document.createElement("div");
+          dash.className = "vs";
+          dash.textContent = "-";
+          scores.appendChild(dash);
+
+          scores.appendChild(createScoreSelect(match.id, "b", saved.b));
+
+          card.append(head, teams, scores);
+          grid.appendChild(card);
         });
 
-        Object.keys(rounds).sort((a, b) => Number(a) - Number(b)).forEach((roundKey) => {
-          const block = document.createElement("section");
-          block.className = "round-block";
+      block.appendChild(grid);
+      els.schedule.appendChild(block);
+    });
+  }
 
-          const title = document.createElement("div");
-          title.className = "round-title";
-          title.textContent = `Round ${roundKey}`;
+  function rerenderScheduleNamesOnly() {
+    if (!state.schedule.length) return;
+    renderSchedule();
+  }
 
-          const grid = document.createElement("div");
-          grid.className = "matches-grid";
+  function computeStats() {
+    const stats = state.names.map((name, idx) => ({
+      idx,
+      name,
+      wins: 0,
+      losses: 0,
+      pf: 0,
+      pa: 0,
+      diff: 0
+    }));
 
-          if (state.byes && state.byes[roundKey] != null) {
-            const byeNote = document.createElement("div");
-            byeNote.className = "tiny";
-            byeNote.style.marginBottom = "8px";
-            byeNote.innerHTML = `<strong>Sitting out:</strong> ${state.names[state.byes[roundKey]]}`;
-            block.appendChild(title);
-            block.appendChild(byeNote);
-          } else {
-            block.appendChild(title);
+    state.schedule.forEach((match) => {
+      const score = state.scores[match.id];
+      if (!score) return;
+      if (!Number.isFinite(score.a) || !Number.isFinite(score.b)) return;
+
+      match.teamA.forEach((pid) => {
+        stats[pid].pf += score.a;
+        stats[pid].pa += score.b;
+      });
+
+      match.teamB.forEach((pid) => {
+        stats[pid].pf += score.b;
+        stats[pid].pa += score.a;
+      });
+
+      if (score.a > score.b) {
+        match.teamA.forEach((pid) => { stats[pid].wins += 1; });
+        match.teamB.forEach((pid) => { stats[pid].losses += 1; });
+      } else if (score.b > score.a) {
+        match.teamB.forEach((pid) => { stats[pid].wins += 1; });
+        match.teamA.forEach((pid) => { stats[pid].losses += 1; });
+      }
+    });
+
+    stats.forEach((s) => {
+      s.diff = s.pf - s.pa;
+    });
+
+    return stats;
+  }
+
+  function renderTable(tbody, rows, cols) {
+    tbody.innerHTML = "";
+    rows.forEach((row, i) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = cols.map((c) => {
+        const value = c === "rank" ? i + 1 : row[c];
+        const numClass = typeof value === "number" ? "num" : "";
+        return `<td class="${numClass}">${value}</td>`;
+      }).join("");
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderRankings() {
+    const stats = computeStats();
+
+    const byWins = stats.slice().sort((a, b) =>
+      b.wins - a.wins ||
+      b.diff - a.diff ||
+      b.pf - a.pf ||
+      a.name.localeCompare(b.name)
+    );
+
+    const byPoints = stats.slice().sort((a, b) =>
+      b.pf - a.pf ||
+      b.diff - a.diff ||
+      b.wins - a.wins ||
+      a.name.localeCompare(b.name)
+    );
+
+    renderTable(els.winsTable, byWins, ["rank", "name", "wins", "losses", "pf", "pa", "diff"]);
+    renderTable(els.pointsTable, byPoints, ["rank", "name", "pf", "pa", "diff", "wins", "losses"]);
+  }
+
+  function clearScores() {
+    state.scores = {};
+    persist();
+    renderSchedule();
+    renderRankings();
+    setStatus("All scores cleared.", "ok");
+  }
+
+  function resetAll() {
+    state.namesByCount = {
+      8: Array.from({ length: 8 }, (_, i) => `Player ${i + 1}`),
+      9: Array.from({ length: 9 }, (_, i) => `Player ${i + 1}`),
+      12: Array.from({ length: 12 }, (_, i) => `Player ${i + 1}`),
+      13: Array.from({ length: 13 }, (_, i) => `Player ${i + 1}`)
+    };
+
+    state.playerCount = MODE_OPTIONS[state.courts][0];
+    populatePlayerCountSelect();
+    state.names = state.namesByCount[currentPlayerCount()].slice();
+    state.schedule = [];
+    state.byes = {};
+    state.scores = {};
+    state.scheduleStyle = 0;
+    els.randomizeNames.checked = true;
+
+    persist();
+    updateSummary();
+    initInputs();
+    renderSchedule();
+    renderRankings();
+    setStatus("Reset complete.", "ok");
+  }
+
+  function persist() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        courts: state.courts,
+        playerCount: state.playerCount,
+        namesByCount: state.namesByCount,
+        schedule: state.schedule,
+        byes: state.byes,
+        scores: state.scores,
+        randomize: els.randomizeNames.checked,
+        scheduleStyle: state.scheduleStyle
+      }));
+    } catch (err) {
+      console.warn("Could not save to localStorage", err);
+    }
+  }
+
+  function restore() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+
+      if (saved.courts === 2 || saved.courts === 3) {
+        state.courts = saved.courts;
+        const radio = els.modeRadios.find(r => Number(r.value) === state.courts);
+        if (radio) radio.checked = true;
+      }
+
+      if (saved.namesByCount && typeof saved.namesByCount === "object") {
+        [8, 9, 12, 13].forEach((count) => {
+          if (Array.isArray(saved.namesByCount[count]) && saved.namesByCount[count].length === count) {
+            state.namesByCount[count] = saved.namesByCount[count];
           }
-
-          rounds[roundKey]
-            .sort((a, b) => a.court - b.court)
-            .forEach((match) => {
-              const card = document.createElement("article");
-              card.className = "match";
-
-              const head = document.createElement("div");
-              head.className = "match-head";
-              head.innerHTML = `<strong>Court ${match.court}</strong><span>Side A vs Side B</span>`;
-
-              const teams = document.createElement("div");
-              teams.className = "teams";
-              teams.innerHTML = `<div>${teamLabel(match.teamA)}</div><div class="vs">vs</div><div>${teamLabel(match.teamB)}</div>`;
-
-              const scores = document.createElement("div");
-              scores.className = "scores";
-
-              const saved = state.scores[match.id] || { a: null, b: null };
-              scores.appendChild(createScoreSelect(match.id, "a", saved.a));
-
-              const dash = document.createElement("div");
-              dash.className = "vs";
-              dash.textContent = "-";
-              scores.appendChild(dash);
-
-              scores.appendChild(createScoreSelect(match.id, "b", saved.b));
-
-              card.append(head, teams, scores);
-              grid.appendChild(card);
-            });
-
-          block.appendChild(grid);
-          els.schedule.appendChild(block);
         });
       }
 
-      function rerenderScheduleNamesOnly() {
-        if (!state.schedule.length) return;
-        renderSchedule();
-      }
-
-      function computeStats() {
-        const stats = state.names.map((name, idx) => ({
-          idx,
-          name,
-          wins: 0,
-          losses: 0,
-          pf: 0,
-          pa: 0,
-          diff: 0
-        }));
-
-        state.schedule.forEach((match) => {
-          const score = state.scores[match.id];
-          if (!score) return;
-          if (!Number.isFinite(score.a) || !Number.isFinite(score.b)) return;
-
-          match.teamA.forEach((pid) => {
-            stats[pid].pf += score.a;
-            stats[pid].pa += score.b;
-          });
-
-          match.teamB.forEach((pid) => {
-            stats[pid].pf += score.b;
-            stats[pid].pa += score.a;
-          });
-
-          if (score.a > score.b) {
-            match.teamA.forEach((pid) => { stats[pid].wins += 1; });
-            match.teamB.forEach((pid) => { stats[pid].losses += 1; });
-          } else if (score.b > score.a) {
-            match.teamB.forEach((pid) => { stats[pid].wins += 1; });
-            match.teamA.forEach((pid) => { stats[pid].losses += 1; });
-          }
-        });
-
-        stats.forEach((s) => {
-          s.diff = s.pf - s.pa;
-        });
-
-        return stats;
-      }
-
-      function renderTable(tbody, rows, cols) {
-        tbody.innerHTML = "";
-        rows.forEach((row, i) => {
-          const tr = document.createElement("tr");
-          tr.innerHTML = cols.map((c) => {
-            const value = c === "rank" ? i + 1 : row[c];
-            const numClass = typeof value === "number" ? "num" : "";
-            return `<td class="${numClass}">${value}</td>`;
-          }).join("");
-          tbody.appendChild(tr);
-        });
-      }
-
-      function renderRankings() {
-        const stats = computeStats();
-
-        const byWins = stats.slice().sort((a, b) =>
-          b.wins - a.wins ||
-          b.diff - a.diff ||
-          b.pf - a.pf ||
-          a.name.localeCompare(b.name)
-        );
-
-        const byPoints = stats.slice().sort((a, b) =>
-          b.pf - a.pf ||
-          b.diff - a.diff ||
-          b.wins - a.wins ||
-          a.name.localeCompare(b.name)
-        );
-
-        renderTable(els.winsTable, byWins, ["rank", "name", "wins", "losses", "pf", "pa", "diff"]);
-        renderTable(els.pointsTable, byPoints, ["rank", "name", "pf", "pa", "diff", "wins", "losses"]);
-      }
-
-      function clearScores() {
-        state.scores = {};
-        persist();
-        renderSchedule();
-        renderRankings();
-        setStatus("All scores cleared.", "ok");
-      }
-
-      function resetAll() {
-        state.namesByCount = {
-          8: Array.from({ length: 8 }, (_, i) => `Player ${i + 1}`),
-          9: Array.from({ length: 9 }, (_, i) => `Player ${i + 1}`),
-          12: Array.from({ length: 12 }, (_, i) => `Player ${i + 1}`),
-          13: Array.from({ length: 13 }, (_, i) => `Player ${i + 1}`)
-        };
-
-        state.playerCount = MODE_OPTIONS[state.courts][0];
-        populatePlayerCountSelect();
-        state.names = state.namesByCount[currentPlayerCount()].slice();
-        state.schedule = [];
-        state.byes = {};
-        state.scores = {};
-        els.randomizeNames.checked = true;
-
-        persist();
-        updateSummary();
-        initInputs();
-        renderSchedule();
-        renderRankings();
-        setStatus("Reset complete.", "ok");
-      }
-
-      function persist() {
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            courts: state.courts,
-            playerCount: state.playerCount,
-            namesByCount: state.namesByCount,
-            schedule: state.schedule,
-            byes: state.byes,
-            scores: state.scores,
-            randomize: els.randomizeNames.checked
-          }));
-        } catch (err) {
-          console.warn("Could not save to localStorage", err);
-        }
-      }
-
-      function restore() {
-        try {
-          const raw = localStorage.getItem(STORAGE_KEY);
-          if (!raw) return;
-          const saved = JSON.parse(raw);
-
-          if (saved.courts === 2 || saved.courts === 3) {
-            state.courts = saved.courts;
-            const radio = els.modeRadios.find(r => Number(r.value) === state.courts);
-            if (radio) radio.checked = true;
-          }
-
-          if (saved.namesByCount && typeof saved.namesByCount === "object") {
-            [8, 9, 12, 13].forEach((count) => {
-              if (Array.isArray(saved.namesByCount[count]) && saved.namesByCount[count].length === count) {
-                state.namesByCount[count] = saved.namesByCount[count];
-              }
-            });
-          }
-
-          populatePlayerCountSelect();
-
-          if (MODE_OPTIONS[state.courts].includes(saved.playerCount)) {
-            state.playerCount = saved.playerCount;
-          } else {
-            state.playerCount = MODE_OPTIONS[state.courts][0];
-          }
-
-          populatePlayerCountSelect();
-          state.names = state.namesByCount[currentPlayerCount()].slice();
-
-          if (Array.isArray(saved.schedule)) {
-            state.schedule = saved.schedule;
-          }
-          if (saved.byes && typeof saved.byes === "object") {
-            state.byes = saved.byes;
-          }
-          if (saved.scores && typeof saved.scores === "object") {
-            state.scores = saved.scores;
-          }
-          if (typeof saved.randomize === "boolean") {
-            els.randomizeNames.checked = saved.randomize;
-          }
-        } catch (err) {
-          console.warn("Could not restore from localStorage", err);
-        }
-      }
-
-      function wire() {
-        els.modeRadios.forEach((radio) => {
-          radio.addEventListener("change", () => switchMode(getModeValue(), false));
-        });
-
-        els.playerCountSelect.addEventListener("change", () => {
-          switchPlayerCount(parseInt(els.playerCountSelect.value, 10), false);
-        });
-
-        els.generateBtn.addEventListener("click", buildSchedule);
-        els.clearScoresBtn.addEventListener("click", clearScores);
-        els.resetAllBtn.addEventListener("click", resetAll);
-        els.randomizeNames.addEventListener("change", persist);
-      }
-
-      restore();
       populatePlayerCountSelect();
-      updateSummary();
-      initInputs();
-      wire();
-      renderSchedule();
-      renderRankings();
-      setStatus(state.schedule.length ? "Loaded saved schedule from this browser." : "");
-    })();
-  </script>
+
+      if (MODE_OPTIONS[state.courts].includes(saved.playerCount)) {
+        state.playerCount = saved.playerCount;
+      } else {
+        state.playerCount = MODE_OPTIONS[state.courts][0];
+      }
+
+      populatePlayerCountSelect();
+      state.names = state.namesByCount[currentPlayerCount()].slice();
+
+      if (Array.isArray(saved.schedule)) state.schedule = saved.schedule;
+      if (saved.byes && typeof saved.byes === "object") state.byes = saved.byes;
+      if (saved.scores && typeof saved.scores === "object") state.scores = saved.scores;
+      if (typeof saved.randomize === "boolean") els.randomizeNames.checked = saved.randomize;
+      if (Number.isInteger(saved.scheduleStyle)) state.scheduleStyle = saved.scheduleStyle;
+    } catch (err) {
+      console.warn("Could not restore from localStorage", err);
+    }
+  }
+
+  function wire() {
+    els.modeRadios.forEach((radio) => {
+      radio.addEventListener("change", () => switchMode(getModeValue(), false));
+    });
+
+    els.playerCountSelect.addEventListener("change", () => {
+      switchPlayerCount(parseInt(els.playerCountSelect.value, 10), false);
+    });
+
+    els.generateBtn.addEventListener("click", buildSchedule);
+    els.clearScoresBtn.addEventListener("click", clearScores);
+    els.resetAllBtn.addEventListener("click", resetAll);
+    els.randomizeNames.addEventListener("change", persist);
+  }
+
+  restore();
+  populatePlayerCountSelect();
+  updateSummary();
+  initInputs();
+  wire();
+  renderSchedule();
+  renderRankings();
+  setStatus(state.schedule.length ? "Loaded saved schedule from this browser." : "");
+})();
+</script>
 </body>
 </html>
